@@ -123,14 +123,8 @@ class SoulmateViewModel : ViewModel() {
 
     fun toggleLookingFor(option: String) {
         _uiState.update {
-            val current = it.selectedLookingFor
-            val updated = when {
-                option == "All" -> listOf("All")
-                current.contains("All") -> listOf(option)
-                current.contains(option) -> current - option
-                else -> current + option
-            }
-            it.copy(selectedLookingFor = updated)
+            // Only can select one option, not more
+            it.copy(selectedLookingFor = listOf(option))
         }
     }
 

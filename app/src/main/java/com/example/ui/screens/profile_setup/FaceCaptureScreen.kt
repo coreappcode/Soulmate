@@ -82,7 +82,7 @@ fun FaceCaptureScreen(
             .navigationBarsPadding()
             .testTag("face_capture_screen")
     ) {
-        // Top header with back button and ProgressDots
+        // Top header with back button and title
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -102,9 +102,12 @@ fun FaceCaptureScreen(
                 )
             }
 
-            ProgressDots(
-                total = 5,
-                current = 3,
+            Text(
+                text = "Face Verification",
+                fontFamily = PoppinsFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                color = TextPrimary,
                 modifier = Modifier.align(Alignment.Center)
             )
         }

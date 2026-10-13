@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -31,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -42,10 +45,6 @@ import com.example.ui.components.ProgressDots
 import com.example.ui.components.SoulChip
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.AuroraHorizontalGradient
-import com.example.ui.theme.BorderFocus
-import com.example.ui.theme.BorderSubtle
-import com.example.ui.theme.CardBackground
-import com.example.ui.theme.ElevatedSurface
 import com.example.ui.theme.H2Style
 import com.example.ui.theme.InputShape
 import com.example.ui.theme.InterFontFamily
@@ -69,9 +68,10 @@ fun AboutYouScreen(
     onContinue: () -> Unit,
     onBack: () -> Unit
 ) {
+    // Mandatory validations
     val isBioValid = bio.trim().length in 10..500
-    val isInterestsValid = selectedInterests.size in 3..10
-    val isLookingForValid = selectedLookingFor.isNotEmpty()
+    val isInterestsValid = selectedInterests.isNotEmpty() && selectedInterests.size <= 10
+    val isLookingForValid = selectedLookingFor.size == 1
 
     val canContinue = isBioValid && isInterestsValid && isLookingForValid
 
@@ -104,8 +104,8 @@ fun AboutYouScreen(
             }
 
             ProgressDots(
-                total = 5,
-                current = 4,
+                total = 4,
+                current = 3,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
@@ -134,14 +134,37 @@ fun AboutYouScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Section 1: Bio
-            Text(
-                text = "Bio",
-                fontFamily = PoppinsFontFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 14.sp,
-                color = TextPrimary
-            )
+            // Section 1: Bio (Mandatory)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Bio",
+                        fontFamily = PoppinsFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "* Mandatory",
+                        fontFamily = InterFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = if (isBioValid) OrchidPrimary else SemanticError
+                    )
+                }
+
+                Text(
+                    text = "${bio.length}/500",
+                    fontFamily = InterFontFamily,
+                    fontSize = 12.sp,
+                    color = if (bio.length > 500) SemanticError else TextMuted
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -150,7 +173,7 @@ fun AboutYouScreen(
                 onValueChange = { if (it.length <= 600) onBioChange(it) },
                 placeholder = {
                     Text(
-                        text = "A quick snippet about your passions, quirks, and dream Sunday afternoon...",
+                        text = "A quick snippet about your passions, quirks, and dream Sunday afternoon... (min 10 characters)",
                         fontFamily = InterFontFamily,
                         fontSize = 14.sp,
                         color = TextMuted
@@ -165,50 +188,59 @@ fun AboutYouScreen(
                     color = TextPrimary
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                    disabledContainerColor = androidx.compose.ui.graphics.Color.White,
-                    focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                    disabledBorderColor = androidx.compose.ui.graphics.Color.Transparent
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    disabledContainerColor = Color.White,
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(2.dp, androidx.compose.ui.graphics.Color(0xFF000000), InputShape)
+                    .border(2.dp, Color(0xFF000000), InputShape)
                     .testTag("bio_input")
             )
 
-            Text(
-                text = "${bio.length}/500",
-                fontFamily = InterFontFamily,
-                fontSize = 12.sp,
-                color = if (bio.length > 500) SemanticError else TextMuted,
-                textAlign = TextAlign.End,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp, end = 4.dp)
-            )
+            if (bio.isNotEmpty() && bio.trim().length < 10) {
+                Text(
+                    text = "${10 - bio.trim().length} more characters required for bio",
+                    fontFamily = InterFontFamily,
+                    fontSize = 12.sp,
+                    color = SemanticError,
+                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Section 2: Interests
+            // Section 2: Interests (Mandatory)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Interests",
+                        fontFamily = PoppinsFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "* Mandatory",
+                        fontFamily = InterFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = if (isInterestsValid) OrchidPrimary else SemanticError
+                    )
+                }
                 Text(
-                    text = "Interests",
-                    fontFamily = PoppinsFontFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 14.sp,
-                    color = TextPrimary
-                )
-                Text(
-                    text = "Pick 3–10 (${selectedInterests.size} selected)",
+                    text = "Pick 1–10 (${selectedInterests.size} selected)",
                     fontFamily = InterFontFamily,
                     fontSize = 12.sp,
-                    color = if (selectedInterests.size in 3..10) OrchidPrimary else TextSecondary
+                    color = if (isInterestsValid) OrchidPrimary else TextSecondary
                 )
             }
 
@@ -231,18 +263,40 @@ fun AboutYouScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Section 3: Looking For
-            Text(
-                text = "Who are you looking for?",
-                fontFamily = PoppinsFontFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 14.sp,
-                color = TextPrimary
-            )
+            // Section 3: Looking For (Mandatory — Only one option allowed)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Who are you looking for?",
+                        fontFamily = PoppinsFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "* Mandatory",
+                        fontFamily = InterFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = if (isLookingForValid) OrchidPrimary else SemanticError
+                    )
+                }
+                Text(
+                    text = "Select 1 option",
+                    fontFamily = InterFontFamily,
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 2x2 grid for Looking For options
+            // 2x2 grid for Looking For options — Strictly single selection with bold visible color
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -283,15 +337,34 @@ fun AboutYouScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
         }
 
-        // Bottom sticky button
-        Box(
+        // Bottom sticky button with mandatory completion reminder
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
+            if (!canContinue) {
+                val missing = mutableListOf<String>().apply {
+                    if (!isBioValid) add("Bio (min 10 chars)")
+                    if (!isInterestsValid) add("At least 1 Interest")
+                    if (!isLookingForValid) add("Who you are looking for")
+                }.joinToString(", ")
+
+                Text(
+                    text = "Required: $missing",
+                    fontFamily = InterFontFamily,
+                    fontSize = 12.sp,
+                    color = SemanticError,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
+            }
+
             GradientButton(
                 text = "Continue",
                 onClick = onContinue,
@@ -313,29 +386,43 @@ private fun LookingForCard(
 
     Box(
         modifier = modifier
-            .height(56.dp)
+            .height(58.dp)
             .clip(cardShape)
             .then(
                 if (isSelected) {
                     Modifier
-                        .background(ElevatedSurface)
-                        .border(2.5.dp, androidx.compose.ui.graphics.Color(0xFF000000), cardShape)
+                        .background(AuroraHorizontalGradient)
+                        .border(2.5.dp, Color(0xFF000000), cardShape)
                 } else {
                     Modifier
-                        .background(CardBackground)
-                        .border(1.5.dp, androidx.compose.ui.graphics.Color(0xFF000000), cardShape)
+                        .background(Color.White)
+                        .border(2.dp, Color(0xFF000000), cardShape)
                 }
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = title,
-            fontFamily = PoppinsFontFamily,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-            fontSize = 14.sp,
-            color = if (isSelected) OrchidPrimary else TextPrimary
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = title,
+                fontFamily = PoppinsFontFamily,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 15.sp,
+                color = if (isSelected) Color.White else TextPrimary
+            )
+            if (isSelected) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
     }
 }

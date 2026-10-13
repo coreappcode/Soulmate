@@ -165,14 +165,14 @@ fun SoulmateNavGraph(
             )
         }
 
-        // 8. Photos Setup Screen
+        // 8. Photos Setup Screen (Navigates directly to About You, face verification is moved to Profile)
         composable(Routes.PHOTOS) {
             PhotosSetupScreen(
                 photos = uiState.photos,
                 onAddPhotoClick = { navController.navigate(Routes.ADD_PHOTO) },
                 onRemovePhoto = { viewModel.removePhoto(it) },
                 onSetMainPhoto = { viewModel.setMainPhoto(it) },
-                onContinue = { navController.navigate(Routes.FACE_CAPTURE) },
+                onContinue = { navController.navigate(Routes.ABOUT_YOU) },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -188,7 +188,7 @@ fun SoulmateNavGraph(
             )
         }
 
-        // 9. Face Capture Screen
+        // 9. Face Capture Screen (Accessible from Profile page)
         composable(Routes.FACE_CAPTURE) {
             FaceCaptureScreen(
                 onFaceCaptured = { selfieUrl ->
@@ -209,10 +209,14 @@ fun SoulmateNavGraph(
             )
         }
 
-        // 11. Verification Success Screen
+        // 11. Verification Success Screen (Returns to Profile page)
         composable(Routes.VERIFY_SUCCESS) {
             VerificationSuccessScreen(
-                onContinue = { navController.navigate(Routes.ABOUT_YOU) }
+                onContinue = {
+                    navController.navigate(Routes.DASHBOARD_PROFILE) {
+                        popUpTo(Routes.DASHBOARD) { inclusive = false }
+                    }
+                }
             )
         }
 
@@ -252,7 +256,24 @@ fun SoulmateNavGraph(
 
         // 14. Dashboard Shell
         composable(Routes.DASHBOARD) {
-            DashboardScreen()
+            DashboardScreen(
+                initialTab = Routes.DASHBOARD_EXPLORE,
+                userProfile = uiState,
+                onNavigateToFaceVerify = {
+                    navController.navigate(Routes.FACE_CAPTURE)
+                }
+            )
+        }
+
+        // 14b. Dashboard Profile Destination
+        composable(Routes.DASHBOARD_PROFILE) {
+            DashboardScreen(
+                initialTab = Routes.DASHBOARD_PROFILE,
+                userProfile = uiState,
+                onNavigateToFaceVerify = {
+                    navController.navigate(Routes.FACE_CAPTURE)
+                }
+            )
         }
     }
 }
