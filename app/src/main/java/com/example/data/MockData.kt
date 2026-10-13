@@ -402,4 +402,87 @@ object MockData {
             lookingFor = listOf("Men", "Women")
         )
     )
+
+    val conversations: List<ChatConversation> = listOf(
+        ChatConversation(
+            id = "conv_1",
+            user = users[0], // Aarav (verified)
+            lastMessage = "Hey Anya! Are you free this Saturday for that indie film screening? 🎬",
+            timestamp = "10:42 AM",
+            unreadCount = 2,
+            isTyping = false,
+            messages = listOf(
+                ChatMessage("m1", "Hey there! Loved your profile photos 😊", false, "10:30 AM", MessageStatus.READ),
+                ChatMessage("m2", "Thanks Aarav! That rooftop coffee shop in your photo looks amazing.", true, "10:35 AM", MessageStatus.READ),
+                ChatMessage("m3", "It really is! Best flat white in Bandra. Have you been to the indie festival yet?", false, "10:38 AM", MessageStatus.READ),
+                ChatMessage("m4", "Hey Anya! Are you free this Saturday for that indie film screening? 🎬", false, "10:42 AM", MessageStatus.DELIVERED)
+            )
+        ),
+        ChatConversation(
+            id = "conv_2",
+            user = users[1], // Chloe (verified)
+            lastMessage = "I made those almond croissants this morning! You have to try one 🥐",
+            timestamp = "Yesterday",
+            unreadCount = 1,
+            isTyping = true,
+            messages = listOf(
+                ChatMessage("m2_1", "Salut! What's your favorite bakery around here?", false, "Yesterday", MessageStatus.READ),
+                ChatMessage("m2_2", "Definitely the French press corner on 5th avenue!", true, "Yesterday", MessageStatus.READ),
+                ChatMessage("m2_3", "I made those almond croissants this morning! You have to try one 🥐", false, "Yesterday", MessageStatus.READ)
+            )
+        ),
+        ChatConversation(
+            id = "conv_3",
+            user = users[6], // Liam (unverified - triggers VerifyToUnlock)
+            lastMessage = "Hey! Loved your taste in music. Would love to chat!",
+            timestamp = "Oct 11",
+            unreadCount = 0,
+            isTyping = false,
+            messages = listOf(
+                ChatMessage("m3_1", "Hey! Loved your taste in music. Would love to chat!", false, "Oct 11", MessageStatus.SENT)
+            )
+        ),
+        ChatConversation(
+            id = "conv_4",
+            user = users[3], // Hana (verified)
+            lastMessage = "Look at this handmade matcha mug I just glazed! 🍵",
+            timestamp = "Oct 10",
+            unreadCount = 0,
+            isTyping = false,
+            messages = listOf(
+                ChatMessage("m4_1", "Your ceramic art is so peaceful Hana!", true, "Oct 9", MessageStatus.READ),
+                ChatMessage("m4_2", "Look at this handmade matcha mug I just glazed! 🍵", false, "Oct 10", MessageStatus.READ, imageUrl = "https://picsum.photos/seed/mug1/600/600")
+            )
+        ),
+        ChatConversation(
+            id = "conv_5",
+            user = users[7], // Ananya (verified)
+            lastMessage = "Haha exactly! Good design should be completely invisible.",
+            timestamp = "Oct 8",
+            unreadCount = 0,
+            isTyping = false,
+            messages = listOf(
+                ChatMessage("m5_1", "Design twin! What prototyping tool do you swear by?", false, "Oct 8", MessageStatus.READ),
+                ChatMessage("m5_2", "Figma all day, but nothing beats sketching on real paper.", true, "Oct 8", MessageStatus.READ),
+                ChatMessage("m5_3", "Haha exactly! Good design should be completely invisible.", false, "Oct 8", MessageStatus.READ)
+            )
+        )
+    )
+
+    val friendRequests: List<FriendRequestItem> = listOf(
+        FriendRequestItem("req_1", users[2], mutualInterests = 3, timestamp = "2h ago"),
+        FriendRequestItem("req_2", users[5], mutualInterests = 4, timestamp = "5h ago"),
+        FriendRequestItem("req_3", users[8], mutualInterests = 2, timestamp = "1d ago")
+    )
+
+    val sentRequests: List<SentFriendRequest> = listOf(
+        SentFriendRequest("sent_1", users[9], "Pending", "1d ago"),
+        SentFriendRequest("sent_2", users[11], "Pending", "3d ago")
+    )
+
+    val blockedUsers: List<User> = listOf(
+        users[14], // Jordan
+        users[19]  // Camila
+    )
 }
+

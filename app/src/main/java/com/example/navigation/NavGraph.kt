@@ -258,9 +258,20 @@ fun SoulmateNavGraph(
         composable(Routes.DASHBOARD) {
             DashboardScreen(
                 initialTab = Routes.DASHBOARD_EXPLORE,
-                userProfile = uiState,
+                viewModel = viewModel,
                 onNavigateToFaceVerify = {
                     navController.navigate(Routes.FACE_CAPTURE)
+                },
+                onNavigateToDatePicker = {
+                    navController.navigate(Routes.DATE_PICKER)
+                },
+                onNavigateToCountryPicker = {
+                    navController.navigate(Routes.COUNTRY_PICKER)
+                },
+                onLogout = {
+                    navController.navigate(Routes.LANDING) {
+                        popUpTo(Routes.LANDING) { inclusive = true }
+                    }
                 }
             )
         }
@@ -269,10 +280,67 @@ fun SoulmateNavGraph(
         composable(Routes.DASHBOARD_PROFILE) {
             DashboardScreen(
                 initialTab = Routes.DASHBOARD_PROFILE,
-                userProfile = uiState,
+                viewModel = viewModel,
                 onNavigateToFaceVerify = {
                     navController.navigate(Routes.FACE_CAPTURE)
+                },
+                onNavigateToDatePicker = {
+                    navController.navigate(Routes.DATE_PICKER)
+                },
+                onNavigateToCountryPicker = {
+                    navController.navigate(Routes.COUNTRY_PICKER)
+                },
+                onLogout = {
+                    navController.navigate(Routes.LANDING) {
+                        popUpTo(Routes.LANDING) { inclusive = true }
+                    }
                 }
+            )
+        }
+
+        // 15. System Screens
+        composable(Routes.SYSTEM_NO_INTERNET) {
+            com.example.ui.screens.system.NoInternetScreen(
+                onRetry = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.SYSTEM_LOCATION_REQUIRED) {
+            com.example.ui.screens.system.LocationRequiredScreen(
+                onEnableLocation = {
+                    viewModel.setLocationPermission(true)
+                    navController.popBackStack()
+                },
+                onContinueCountryOnly = {
+                    navController.popBackStack()
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.SYSTEM_LOADING) {
+            com.example.ui.screens.system.LoadingScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.SYSTEM_ERROR) {
+            com.example.ui.screens.system.ErrorScreen(
+                onRetry = { navController.popBackStack() },
+                onGoHome = {
+                    navController.navigate(Routes.DASHBOARD) {
+                        popUpTo(Routes.DASHBOARD) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.SYSTEM_MAINTENANCE) {
+            com.example.ui.screens.system.MaintenanceScreen(
+                onTryAgain = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
             )
         }
     }

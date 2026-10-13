@@ -57,12 +57,34 @@ import com.example.ui.theme.SemanticError
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import com.example.utils.Constants
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithCache
+import com.example.ui.theme.ActiveTabLabel
+import com.example.ui.theme.AuroraHorizontalGradient
+import com.example.ui.theme.BottomNavBackground
+import com.example.ui.theme.BrandShadowColor
+import com.example.ui.theme.HairlineDivider
+import com.example.ui.theme.HeaderBackground
+import com.example.ui.theme.InactiveTabColor
+
+fun Modifier.gradientTint(brush: Brush): Modifier = this
+    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+    .drawWithCache {
+        onDrawWithContent {
+            drawContent()
+            drawRect(brush = brush, blendMode = BlendMode.SrcAtop)
+        }
+    }
 
 @Composable
 fun SoulTopBar(
     title: String = "",
-    showLogo: Boolean = false,
     showBack: Boolean = false,
     onBackClick: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -71,10 +93,19 @@ fun SoulTopBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(AppBackground)
+            .background(HeaderBackground)
             .statusBarsPadding()
             .height(56.dp)
+            .drawBehind {
+                drawLine(
+                    color = HairlineDivider,
+                    start = Offset(0f, size.height),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
             .padding(horizontal = 16.dp)
+            .testTag("top_bar_${title.lowercase().replace(" ", "_")}")
     ) {
         Row(
             modifier = Modifier.matchParentSize(),
@@ -98,18 +129,6 @@ fun SoulTopBar(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                }
-
-                if (showLogo) {
-                    AsyncImage(
-                        model = Constants.LOGO_URL,
-                        contentDescription = "Soulmate Logo",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("top_bar_logo")
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
                 }
 
                 if (title.isNotEmpty()) {
@@ -147,17 +166,17 @@ fun SoulBottomNav(
 ) {
     val items = listOf(
         NavItemData(
+            route = Routes.DASHBOARD_EXPLORE,
+            label = "Explore",
+            selectedIcon = Icons.Filled.AutoAwesome,
+            unselectedIcon = Icons.Outlined.AutoAwesome
+        ),
+        NavItemData(
             route = Routes.DASHBOARD_CHATS,
             label = "Chats",
             selectedIcon = Icons.Filled.ChatBubble,
             unselectedIcon = Icons.Outlined.ChatBubbleOutline,
             badgeCount = "3"
-        ),
-        NavItemData(
-            route = Routes.DASHBOARD_EXPLORE,
-            label = "Explore",
-            selectedIcon = Icons.Filled.AutoAwesome,
-            unselectedIcon = Icons.Outlined.AutoAwesome
         ),
         NavItemData(
             route = Routes.DASHBOARD_FRIENDS,
@@ -184,13 +203,21 @@ fun SoulBottomNav(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 16.dp,
+                elevation = 12.dp,
                 ambientColor = BrandShadowSoft,
-                spotColor = BrandShadowSoft
+                spotColor = BrandShadowColor
             )
-            .background(CardBackground)
+            .background(BottomNavBackground)
+            .drawBehind {
+                drawLine(
+                    color = HairlineDivider,
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
             .navigationBarsPadding()
-            .height(72.dp)
+            .height(68.dp)
             .padding(horizontal = 8.dp)
     ) {
         Row(
@@ -206,7 +233,7 @@ fun SoulBottomNav(
                         .weight(1f)
                         .clip(CircleShape)
                         .clickable { onNavigate(item.route) }
-                        .padding(vertical = 6.dp)
+                        .padding(vertical = 4.dp)
                         .testTag("nav_tab_${item.label.lowercase()}"),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -227,12 +254,23 @@ fun SoulBottomNav(
                             }
                         }
                     ) {
-                        Icon(
-                            imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                            contentDescription = item.label,
-                            tint = if (isSelected) OrchidPrimary else TextMuted,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        if (isSelected) {
+                            Icon(
+                                imageVector = item.selectedIcon,
+                                contentDescription = item.label,
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .gradientTint(AuroraHorizontalGradient)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = item.unselectedIcon,
+                                contentDescription = item.label,
+                                tint = InactiveTabColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(3.dp))
@@ -242,7 +280,7 @@ fun SoulBottomNav(
                         fontFamily = PoppinsFontFamily,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         fontSize = 11.sp,
-                        color = if (isSelected) OrchidPrimary else TextMuted
+                        color = if (isSelected) ActiveTabLabel else InactiveTabColor
                     )
                 }
             }

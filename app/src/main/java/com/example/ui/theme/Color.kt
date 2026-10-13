@@ -24,6 +24,11 @@ val AppBackground = Color(0xFFFFF7F2)     // warm cream — never pure white/bla
 val CardBackground = Color(0xFFFFFFFF)    // only cards use pure white
 val ElevatedSurface = Color(0xFFFDF2F8)   // soft blush
 val DarkAccent = Color(0xFF2A1B3D)        // deep plum — used sparingly, never as main bg
+val HeaderBackground = Color(0xFFFBE9F1)  // soft rose blush for top app bar
+val BottomNavBackground = Color(0xFFF3E8FF) // soft lavender for bottom nav
+val HairlineDivider = Color(0xFFF0E6EC)   // 1dp hairline divider
+val ActiveTabLabel = Color(0xFFC86DD7)    // active tab label orchid
+val InactiveTabColor = Color(0xFFA99BB5)  // inactive tab lavender-gray
 
 // Text Colors
 val TextPrimary = Color(0xFF1A1423)       // near-black plum, never pure black
