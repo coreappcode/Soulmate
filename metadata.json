@@ -1,0 +1,6 @@
+{
+  "name": "Soulmate",
+  "description": "Find your people, nearby. Swipe, connect, and chat on your terms with Soulmate.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
