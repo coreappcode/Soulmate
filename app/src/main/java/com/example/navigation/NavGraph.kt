@@ -244,12 +244,12 @@ fun SoulmateNavGraph(
                 onAllowNotifications = { viewModel.setNotificationsPermission(true) },
                 onEnterSoulmate = {
                     navController.navigate(Routes.DASHBOARD) {
-                        popUpTo(Routes.LANDING) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 },
                 onSkip = {
                     navController.navigate(Routes.DASHBOARD) {
-                        popUpTo(Routes.LANDING) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )
@@ -271,7 +271,7 @@ fun SoulmateNavGraph(
                 },
                 onLogout = {
                     navController.navigate(Routes.LANDING) {
-                        popUpTo(Routes.LANDING) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )
@@ -293,7 +293,7 @@ fun SoulmateNavGraph(
                 },
                 onLogout = {
                     navController.navigate(Routes.LANDING) {
-                        popUpTo(Routes.LANDING) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )

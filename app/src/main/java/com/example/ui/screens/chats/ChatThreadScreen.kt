@@ -305,7 +305,7 @@ fun ChatThreadScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(AppBackground)
                 .border(width = 1.dp, color = HairlineDivider)
                 .navigationBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp)

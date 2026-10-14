@@ -57,6 +57,7 @@ import com.example.ui.components.SoulOutlinedButton
 import com.example.ui.components.SoulTopBar
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.CardBackground
+import com.example.ui.theme.HairlineDivider
 import com.example.ui.theme.InterFontFamily
 import com.example.ui.theme.OrchidPrimary
 import com.example.ui.theme.PillShape
@@ -76,26 +77,28 @@ fun EditPhotosScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCropModel by remember { mutableStateOf<String?>(null) }
 
     // Real Android Photo Picker launcher
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            pendingCropUri = uri
+            pendingCropModel = uri.toString()
         }
     }
 
-    if (pendingCropUri != null) {
+    if (pendingCropModel != null) {
         // Android photo crop / adjustment view
         PhotoCropAdjustmentView(
-            imageUri = pendingCropUri!!,
-            onCancel = { pendingCropUri = null },
+            imageModel = pendingCropModel!!,
+            onCancel = { pendingCropModel = null },
             onConfirm = { croppedUriString ->
-                onAddPhoto(croppedUriString)
-                pendingCropUri = null
-                Toast.makeText(context, "Photo added to your profile!", Toast.LENGTH_SHORT).show()
+                if (!photos.contains(croppedUriString)) {
+                    onAddPhoto(croppedUriString)
+                }
+                pendingCropModel = null
+                Toast.makeText(context, "Photo updated in your profile!", Toast.LENGTH_SHORT).show()
             }
         )
         return
@@ -223,6 +226,26 @@ fun EditPhotosScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
+
+                            // Crop Photo Button
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(6.dp)
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xCC1A1423))
+                                    .clickable { pendingCropModel = photoUrl }
+                                    .testTag("crop_photo_$index"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Crop,
+                                    contentDescription = "Crop Photo",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     } else {
                         // Dashed empty slot
@@ -303,7 +326,7 @@ fun EditPhotosScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(AppBackground)
-                .border(width = 1.dp, color = Color(0xFF000000).copy(alpha = 0.08f))
+                .border(width = 1.dp, color = HairlineDivider)
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
             GradientButton(
@@ -317,14 +340,14 @@ fun EditPhotosScreen(
 
 @Composable
 private fun PhotoCropAdjustmentView(
-    imageUri: Uri,
+    imageModel: String,
     onCancel: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF1A1423))
+            .background(AppBackground)
             .testTag("photo_crop_view")
     ) {
         SoulTopBar(
@@ -345,7 +368,7 @@ private fun PhotoCropAdjustmentView(
                 text = "Adjust photo framing for your 3:4 profile card",
                 fontFamily = InterFontFamily,
                 fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.8f),
+                color = TextSecondary,
                 textAlign = TextAlign.Center
             )
 
@@ -357,12 +380,12 @@ private fun PhotoCropAdjustmentView(
                     .fillMaxWidth(0.85f)
                     .aspectRatio(3f / 4f)
                     .clip(RoundedCornerShape(20.dp))
-                    .border(2.dp, OrchidPrimary, RoundedCornerShape(20.dp))
+                    .border(2.5.dp, OrchidPrimary, RoundedCornerShape(20.dp))
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
                 AsyncImage(
-                    model = imageUri,
+                    model = imageModel,
                     contentDescription = "Crop Preview",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -385,35 +408,41 @@ private fun PhotoCropAdjustmentView(
                 Icon(
                     imageVector = Icons.Default.Crop,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = OrchidPrimary,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "3:4 Aspect Ratio Locked",
                     fontFamily = PoppinsFontFamily,
                     fontSize = 12.sp,
-                    color = Color.White
+                    color = TextPrimary
                 )
             }
         }
 
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                .background(AppBackground)
+                .border(width = 1.dp, color = HairlineDivider)
+                .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
-            SoulOutlinedButton(
-                text = "Cancel",
-                onClick = onCancel,
-                modifier = Modifier.weight(1f)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                SoulOutlinedButton(
+                    text = "Cancel",
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f)
+                )
 
-            GradientButton(
-                text = "Confirm Photo",
-                onClick = { onConfirm(imageUri.toString()) },
-                modifier = Modifier.weight(1.3f)
-            )
+                GradientButton(
+                    text = "Confirm Photo",
+                    onClick = { onConfirm(imageModel) },
+                    modifier = Modifier.weight(1.3f)
+                )
+            }
         }
     }
 }
