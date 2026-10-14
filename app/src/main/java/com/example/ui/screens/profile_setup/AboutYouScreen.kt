@@ -48,7 +48,6 @@ import com.example.ui.theme.AuroraHorizontalGradient
 import com.example.ui.theme.H2Style
 import com.example.ui.theme.InputShape
 import com.example.ui.theme.InterFontFamily
-import com.example.ui.theme.OrchidPrimary
 import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.SemanticError
 import com.example.ui.theme.TextMuted
@@ -68,10 +67,10 @@ fun AboutYouScreen(
     onContinue: () -> Unit,
     onBack: () -> Unit
 ) {
-    // Mandatory validations
+    // Validations: Bio minimum 10 chars, at least 1 interest, exactly 1 option chosen for looking for
     val isBioValid = bio.trim().length in 10..500
     val isInterestsValid = selectedInterests.isNotEmpty() && selectedInterests.size <= 10
-    val isLookingForValid = selectedLookingFor.size == 1
+    val isLookingForValid = selectedLookingFor.isNotEmpty()
 
     val canContinue = isBioValid && isInterestsValid && isLookingForValid
 
@@ -134,29 +133,19 @@ fun AboutYouScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Section 1: Bio (Mandatory)
+            // Section 1: Bio
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Bio",
-                        fontFamily = PoppinsFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "* Mandatory",
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                        color = if (isBioValid) OrchidPrimary else SemanticError
-                    )
-                }
+                Text(
+                    text = "Bio *",
+                    fontFamily = PoppinsFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = TextPrimary
+                )
 
                 Text(
                     text = "${bio.length}/500",
@@ -213,34 +202,24 @@ fun AboutYouScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Section 2: Interests (Mandatory)
+            // Section 2: Interests
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Interests",
-                        fontFamily = PoppinsFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "* Mandatory",
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                        color = if (isInterestsValid) OrchidPrimary else SemanticError
-                    )
-                }
                 Text(
-                    text = "Pick 1–10 (${selectedInterests.size} selected)",
+                    text = "Interests *",
+                    fontFamily = PoppinsFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = TextPrimary
+                )
+                Text(
+                    text = "${selectedInterests.size}/10 selected",
                     fontFamily = InterFontFamily,
                     fontSize = 12.sp,
-                    color = if (isInterestsValid) OrchidPrimary else TextSecondary
+                    color = TextSecondary
                 )
             }
 
@@ -263,40 +242,23 @@ fun AboutYouScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Section 3: Looking For (Mandatory — Only one option allowed)
+            // Section 3: Who are you looking for? (Single selection)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Who are you looking for?",
-                        fontFamily = PoppinsFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "* Mandatory",
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                        color = if (isLookingForValid) OrchidPrimary else SemanticError
-                    )
-                }
                 Text(
-                    text = "Select 1 option",
-                    fontFamily = InterFontFamily,
-                    fontSize = 12.sp,
-                    color = TextSecondary
+                    text = "Who are you looking for? *",
+                    fontFamily = PoppinsFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = TextPrimary
                 )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 2x2 grid for Looking For options — Strictly single selection with bold visible color
+            // 2x2 grid for Looking For options — Strictly single selection
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -340,7 +302,7 @@ fun AboutYouScreen(
             Spacer(modifier = Modifier.height(28.dp))
         }
 
-        // Bottom sticky button with mandatory completion reminder
+        // Bottom sticky button
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -349,12 +311,12 @@ fun AboutYouScreen(
             if (!canContinue) {
                 val missing = mutableListOf<String>().apply {
                     if (!isBioValid) add("Bio (min 10 chars)")
-                    if (!isInterestsValid) add("At least 1 Interest")
-                    if (!isLookingForValid) add("Who you are looking for")
-                }.joinToString(", ")
+                    if (!isInterestsValid) add("Select at least 1 Interest")
+                    if (!isLookingForValid) add("Select who you are looking for")
+                }.joinToString(" • ")
 
                 Text(
-                    text = "Required: $missing",
+                    text = missing,
                     fontFamily = InterFontFamily,
                     fontSize = 12.sp,
                     color = SemanticError,

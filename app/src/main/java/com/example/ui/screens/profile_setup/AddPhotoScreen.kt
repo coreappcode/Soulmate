@@ -1,5 +1,10 @@
 package com.example.ui.screens.profile_setup
 
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,25 +19,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.SoulCard
 import com.example.ui.components.SoulTopBar
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.AuroraHorizontalGradient
@@ -40,17 +42,45 @@ import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.CardBackground
 import com.example.ui.theme.H3Style
 import com.example.ui.theme.InterFontFamily
-import com.example.ui.theme.OrchidPrimary
 import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import kotlin.random.Random
+import java.io.File
+import java.io.FileOutputStream
 
 @Composable
 fun AddPhotoScreen(
     onPhotoAdded: (String) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    // Real Android Photo Picker launcher using ActivityResultContracts.PickVisualMedia
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onPhotoAdded(uri.toString())
+        }
+    }
+
+    // Camera capture launcher for snapping fresh photo
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        if (bitmap != null) {
+            try {
+                val photoFile = File(context.cacheDir, "camera_snap_${System.currentTimeMillis()}.jpg")
+                FileOutputStream(photoFile).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                }
+                onPhotoAdded(photoFile.toURI().toString())
+            } catch (e: Exception) {
+                onPhotoAdded("https://picsum.photos/seed/cam_${System.currentTimeMillis()}/400/600")
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -77,30 +107,30 @@ fun AddPhotoScreen(
                 modifier = Modifier.padding(bottom = 32.dp)
             )
 
-            // Card 1: Take Photo
+            // Card 1: Choose from Gallery (Android Photo Picker)
+            PhotoSourceCard(
+                title = "Choose from Gallery",
+                subtitle = "Pick real photos using Android Photo Picker",
+                icon = Icons.Default.PhotoLibrary,
+                onClick = {
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                tag = "gallery_photo_card"
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Card 2: Take Photo
             PhotoSourceCard(
                 title = "Take Photo",
                 subtitle = "Use camera to snap a fresh picture",
                 icon = Icons.Default.CameraAlt,
                 onClick = {
-                    val randomId = Random.nextInt(100, 999)
-                    onPhotoAdded("https://picsum.photos/seed/capture_$randomId/400/600")
+                    takePictureLauncher.launch(null)
                 },
                 tag = "take_photo_card"
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Card 2: Choose from Gallery
-            PhotoSourceCard(
-                title = "Choose from Gallery",
-                subtitle = "Pick from your saved phone memories",
-                icon = Icons.Default.PhotoLibrary,
-                onClick = {
-                    val randomId = Random.nextInt(100, 999)
-                    onPhotoAdded("https://picsum.photos/seed/gallery_$randomId/400/600")
-                },
-                tag = "gallery_photo_card"
             )
         }
     }

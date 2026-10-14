@@ -47,7 +47,7 @@ data class UserProfileState(
     val isFaceVerified: Boolean = true,
     val bio: String = "Coffee enthusiast, indie music lover, and UI designer exploring cozy cafes. Always ready for impromptu weekend getaways and good conversation.",
     val selectedInterests: List<String> = listOf("Coffee", "Music", "Design", "Travel", "Photography"),
-    val selectedLookingFor: List<String> = listOf("Relationship"),
+    val selectedLookingFor: List<String> = listOf("Men"),
     val city: String = "Mumbai",
     val email: String = "anya.sharma@example.com",
     val height: String = "5'6\"",

@@ -239,13 +239,7 @@ class SoulmateViewModel : ViewModel() {
 
     fun toggleLookingFor(option: String) {
         _uiState.update {
-            val current = it.selectedLookingFor
-            val updated = if (current.contains(option)) {
-                if (current.size > 1) current - option else current
-            } else {
-                current + option
-            }
-            it.copy(selectedLookingFor = updated)
+            it.copy(selectedLookingFor = listOf(option))
         }
     }
 

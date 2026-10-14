@@ -170,6 +170,7 @@ fun SoulmateNavGraph(
             PhotosSetupScreen(
                 photos = uiState.photos,
                 onAddPhotoClick = { navController.navigate(Routes.ADD_PHOTO) },
+                onPhotoSelected = { viewModel.addPhoto(it) },
                 onRemovePhoto = { viewModel.removePhoto(it) },
                 onSetMainPhoto = { viewModel.setMainPhoto(it) },
                 onContinue = { navController.navigate(Routes.ABOUT_YOU) },

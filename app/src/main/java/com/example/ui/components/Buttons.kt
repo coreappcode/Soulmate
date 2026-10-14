@@ -110,7 +110,8 @@ fun SoulOutlinedButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    leadingIcon: (@Composable () -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -137,12 +138,18 @@ fun SoulOutlinedButton(
             .height(52.dp)
             .testTag("outlined_button_${text.lowercase().replace(" ", "_")}")
     ) {
-        Text(
-            text = text,
-            style = ButtonTextStyle.copy(
-                color = OrchidPrimary
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (leadingIcon != null) {
+                leadingIcon()
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = text,
+                style = ButtonTextStyle.copy(
+                    color = OrchidPrimary
+                )
             )
-        )
+        }
     }
 }
 
