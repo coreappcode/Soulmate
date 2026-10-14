@@ -9,73 +9,91 @@
 - **Application ID:** `com.aistudio.datingapp.rvyb`
 - **Architecture:** Single-Activity MVVM (Model-View-ViewModel) built 100% in Kotlin & Jetpack Compose
 - **Design System:** Custom Material Design 3 (M3) "Aurora Warm" Design System with Edge-to-Edge system insets
-- **Navigation:** Navigation Compose (`NavHost` / `NavController`) with slide + cross-fade page transitions
-- **State Management:** `SoulmateViewModel` driving Kotlin Coroutines `MutableStateFlow` and immutable UI state representations
+- **Header & Navbar Theme:** Tinder-Model Iconic Pink (`#FD3A73`) for all Top App Bar headers and Bottom Navigation Bar tabs
+- **Navigation Architecture:** Dual-layer navigation system:
+  1. Jetpack Navigation Compose (`NavHost` / `NavController`) with slide + cross-fade page transitions for top-level routes (Splash, Landing, Onboarding, Dashboard, System fallback screens).
+  2. In-Scaffold reactive sub-screen state machine (`ActiveSubScreen`) within `DashboardScreen` for instant tab switching, smooth child-screen transitions, and automatic back-stack popping via Jetpack `BackHandler`.
+- **State Management:** `SoulmateViewModel` driving Kotlin Coroutines `MutableStateFlow` and immutable reactive UI state representations
 
 ---
 
-## 2. Colour Palette & Visual Design Pattern
+## 2. Colour Palette & Visual Design System
 
-The application uses an **Aurora Warm** aesthetic. Pure blacks (#000000) are reserved for sharp high-contrast form borders and buttons, while backgrounds use warm cream and blush tones.
+The application uses the **Aurora Warm** aesthetic with high-visibility, brand-defining **Tinder Pink** for all structural navigation components (headers and bottom navigation bars).
 
-| Token Name | Hex Code | Visual Swatch Role | Usage in App |
+| Token Name | Hex Code | Visual Swatch Role | Exact Usage in App |
 | :--- | :--- | :--- | :--- |
-| **RosePrimary** | `#FFFF6B9D` | Warm Rose Pink | Aurora gradient start, like buttons, hearts |
-| **OrchidPrimary** | `#FFC86DD7` | Radiant Orchid Purple | Aurora gradient middle, active tabs, main accents |
+| **TinderPink** | `#FFFD3A73` | Iconic Tinder Pink | **Primary brand color for Top App Bar header & Bottom Nav Bar** |
+| **HeaderBackground** | `#FFFD3A73` | Iconic Tinder Pink | **Top app bars across Explore, Chats, Friends, Settings, and Profile** |
+| **BottomNavBackground** | `#FFFD3A73` | Iconic Tinder Pink | **Dashboard bottom navigation bar background across all tabs** |
+| **ActiveTabLabel** | `#FFFFFFFF` | Crisp White | Active tab label and active icon on Tinder Pink nav bar |
+| **InactiveTabColor** | `#FFFFD1DC` | Soft Pink-White | Inactive tab label and inactive icon on Tinder Pink nav bar |
+| **RosePrimary** | `#FFFF6B9D` | Warm Rose Pink | Aurora gradient start, like buttons, heart icons |
+| **OrchidPrimary** | `#FFC86DD7` | Radiant Orchid Purple | Aurora gradient middle, active tab pill accents |
 | **PeriwinklePrimary** | `#FF6E8EFB` | Soft Periwinkle Blue | Aurora gradient end, verified badges, action pills |
-| **AppBackground** | `#FFFFF7F2` | Warm Cream | Canvas background across all screens |
-| **CardBackground** | `#FFFFFFFF` | Pure White | Elevated content cards, message bubbles |
-| **ElevatedSurface** | `#FFFDF2F8` | Soft Blush | Chips, secondary pill backgrounds |
-| **DarkAccent** | `#FF2A1B3D` | Deep Plum | Primary contrasting elements |
-| **HeaderBackground** | `#FFFBE9F1` | Soft Rose Blush | Top app bars, header banners |
-| **BottomNavBackground** | `#FFF3E8FF` | Soft Lavender | Dashboard bottom navigation bar |
-| **HairlineDivider** | `#FFF0E6EC` | Subtle Lilac Line | 1dp dividers between list items |
-| **TextPrimary** | `#FF1A1423` | Dark Plum-Black | Headings, titles, primary body text |
-| **TextSecondary** | `#FF6B5B7A` | Muted Plum-Gray | Subtitles, helper text, timestamps |
-| **TextMuted** | `#FFA99BB5` | Lavender Gray | Placeholders, inactive icons |
-| **BorderBlack** | `#FF000000` | Solid Black | 2dp high-visibility input & card borders |
-| **SemanticSuccess** | `#FF34D399` | Mint Green | Online indicator, verification success |
-| **SemanticError** | `#FFF87171` | Coral Red | Validation warnings, delete account, blocks |
-| **SemanticWarning** | `#FFFBBF24` | Warm Amber | Match expiry, pending status |
+| **AppBackground** | `#FFFFF7F2` | Warm Cream | Canvas background across screens (never pure white/black) |
+| **CardBackground** | `#FFFFFFFF` | Pure White | Elevated content cards, message bubbles, swipe cards |
+| **ElevatedSurface** | `#FFFDF2F8` | Soft Blush | Chips, secondary pill backgrounds, pill buttons |
+| **DarkAccent** | `#FF2A1B3D` | Deep Plum | Primary contrasting elements, bold highlights |
+| **HairlineDivider** | `#FFF0E6EC` | Subtle Lilac Line | 1dp dividers and borders between list items |
+| **TextPrimary** | `#FF1A1423` | Dark Plum-Black | Headings, titles, primary body text (never pure black) |
+| **TextSecondary** | `#FF6B5B7A` | Muted Plum-Gray | Subtitles, helper text, timestamps, secondary labels |
+| **TextMuted** | `#FFA99BB5` | Lavender Gray | Placeholders, inactive indicators, countdown timers |
+| **BorderBlack** | `#FF000000` | Solid Black | 2dp high-visibility input & card borders during onboarding |
+| **BorderSubtle** | `#FFE8D5E5` | Muted Lilac | Subtle card borders |
+| **SemanticSuccess** | `#FF34D399` | Mint Green | Online indicator, verification checkmark success |
+| **SemanticError** | `#FFF87171` | Coral Red | Validation warnings, delete account, report/block actions |
+| **SemanticWarning** | `#FFFBBF24` | Warm Amber | Match expiry timers, pending requests |
 
 ### Gradients
-- **`AuroraGradient`**: Linear diagonal sweep from `RosePrimary` → `OrchidPrimary` → `PeriwinklePrimary`.
+- **`AuroraGradient`**: Linear diagonal sweep from `RosePrimary` (`#FFFF6B9D`) → `OrchidPrimary` (`#FFC86DD7`) → `PeriwinklePrimary` (`#FF6E8EFB`).
 - **`AuroraHorizontalGradient`**: Linear horizontal sweep used on primary action buttons (`GradientButton`) and active indicators.
 
 ---
 
 ## 3. Core Reusable UI Components, Buttons & Icons
 
-### Buttons
-1. **`GradientButton`** (`com.example.ui.components.Buttons.kt`)
-   - **Style:** Full-width pill or rounded rectangle (18dp corner radius) filled with `AuroraHorizontalGradient`.
-   - **Behavior:** Material ripple, press-down scale animation (`0.97f`), circular progress indicator when `loading = true`.
-2. **`SoulOutlinedButton`** (`com.example.ui.components.Buttons.kt`)
+### Navigation Components (`com.example.ui.components.NavComponents.kt`)
+1. **`SoulTopBar`**
+   - **Background:** `HeaderBackground` (`#FD3A73` Tinder Pink)
+   - **Content Color:** Crisp White (`#FFFFFF`)
+   - **Height:** 56.dp + `statusBarsPadding()`
+   - **Features:** Optional back navigation arrow (`Icons.AutoMirrored.Filled.ArrowBack`), bold title in `PoppinsFontFamily`, flexible `actions` RowScope slot (e.g. Search and Filter buttons on Explore).
+   - **Bottom Edge:** 1dp semi-transparent hairline divider (`Color.White.copy(alpha = 0.25f)`).
+2. **`SoulBottomNav`**
+   - **Background:** `BottomNavBackground` (`#FD3A73` Tinder Pink)
+   - **Elevation & Shadow:** 8.dp elevation with brand-tinted shadow
+   - **Height:** 68.dp + `navigationBarsPadding()`
+   - **Top Edge:** 1dp semi-transparent hairline divider (`Color.White.copy(alpha = 0.25f)`).
+   - **Tabs (5 items):**
+     1. **Explore:** `AutoAwesome` icon (Filled when active, Outlined when inactive)
+     2. **Chats:** `ChatBubble` icon with unread badge counter (`"3"`)
+     3. **Friends:** `People` icon with pending request badge counter (`"2"`)
+     4. **Settings:** `Settings` icon
+     5. **Profile:** `Person` icon
+   - **Active State:** White icon + White label + scale animation
+   - **Inactive State:** `InactiveTabColor` (`#FFD1DC`) icon + label
+
+### Buttons (`com.example.ui.components.Buttons.kt`)
+1. **`GradientButton`**
+   - **Style:** Full-width rounded rectangle (18dp corner radius) filled with `AuroraHorizontalGradient`.
+   - **Behavior:** Material ripple, press-down micro-scale animation (`0.97f`), circular progress indicator when `loading = true`.
+2. **`SoulOutlinedButton`**
    - **Style:** Outlined border (1.5dp `OrchidPrimary`), transparent background, orchid text.
    - **Behavior:** Press-down micro-scale animation, optional leading icon parameter.
-3. **`FloatingActionButton` (FABs) & Icon Buttons**
-   - Circular card buttons with 1dp border and brand shadow for Explore swipe actions (Pass, Superlike, Like).
+3. **Card & Circular Action Buttons**
+   - Circular action buttons (Pass "X", Superlike "Star", Like "Heart", Rewind "Replay") with tactile elevation.
 
-### Input Components
-1. **`SoulTextField`** (`com.example.ui.components.Inputs.kt`)
-   - Clean white container with solid 2dp black border (`BorderBlack`), label in `PoppinsFontFamily`, optional leading and trailing icon slots, error message display.
-2. **`SoulChip`** (`com.example.ui.components.Cards.kt`)
-   - Selectable interest pill. Selected state uses `AuroraHorizontalGradient` with white text and black border; unselected state uses white background with black border.
-3. **`ProgressDots`** (`com.example.ui.components.Navigation.kt`)
-   - 5-dot sequential step indicator for the profile setup wizard.
-
-### Primary Icons Used
-- **Navigation:** `Icons.AutoMirrored.Filled.ArrowBack`, `Icons.Default.Close`, `Icons.Default.ChevronRight`
-- **Dashboard Tabs:** `Icons.Default.Explore`, `Icons.Default.Chat`, `Icons.Default.People`, `Icons.Default.Settings`, `Icons.Default.Person`
-- **Photo & Camera:** `Icons.Default.PhotoLibrary`, `Icons.Default.CameraAlt`, `Icons.Default.Add`, `Icons.Default.Crop`
-- **Actions & Status:** `Icons.Default.Favorite`, `Icons.Default.Star`, `Icons.Default.CheckCircle`, `Icons.Default.Verified`, `Icons.Default.Search`, `Icons.Default.FilterList`
-- **Profile & Gender:** `Icons.Default.Male`, `Icons.Default.Female`, `Icons.Default.Transgender`, `Icons.Default.CalendarMonth`, `Icons.Default.LocationOn`
+### Input Components (`com.example.ui.components.Inputs.kt`)
+1. **`SoulTextField`**: Clean container with high-contrast border, label in `PoppinsFontFamily`, leading/trailing icon slots, and error feedback.
+2. **`OtpInput`**: 6 individual styled digit cells supporting auto-advance, backspace handling, and paste.
+3. **`SoulChip`**: Selectable pill chip with gradient fill when active.
 
 ---
 
-## 4. Complete Screen Directory & Navigations (All 55 Screens)
+## 4. Complete Screen Directory & Navigations (All 56 Screens)
 
-Below is the complete inventory of all 55 screens within the application, including route strings, trigger points, incoming/outgoing destinations, and action buttons.
+The application consists of **56 complete UI screens** organized into 9 logical functional domains.
 
 ---
 
@@ -84,53 +102,52 @@ Below is the complete inventory of all 55 screens within the application, includ
 #### 1. Splash Screen
 - **Route:** `splash` (`Routes.SPLASH`)
 - **File:** `ui/screens/splash/SplashScreen.kt`
-- **Description:** Warm branded landing screen with pulsing Aurora heart logo and animated title.
+- **Description:** Branded entry screen with pulsing Aurora heart logo and animated title typography.
 - **Navigations:**
-  - Automatically transitions after 2000ms delay to `Routes.LANDING`.
+  - Automatic 2000ms delay timer → navigates to `Routes.LANDING` (popping `splash` off backstack).
 - **Buttons / Actions:** None (automatic timer).
-- **Icons:** Custom animated vector Heart / Aurora Icon.
+- **Icons:** Animated Vector Heart / Aurora Icon.
 
 #### 2. Landing Screen
 - **Route:** `landing` (`Routes.LANDING`)
 - **File:** `ui/screens/onboarding/LandingScreen.kt`
-- **Description:** Welcoming hero screen displaying the app value proposition.
+- **Description:** Full-screen immersive hero image background (`img_landing_hero.jpg`), clean design with zero unwanted white containers and zero text clutter. Features only the elevated "Get Started" action button positioned up from the bottom.
 - **Navigations:**
-  - "Get Started" / "Continue with Phone" → navigates to `Routes.PHONE_ENTRY`.
-  - Terms of Service link → navigates to `Routes.SETTINGS_TERMS`.
+  - "Get Started" button tap → navigates to `Routes.PHONE_ENTRY`.
 - **Buttons:** `GradientButton` ("Get Started").
-- **Icons:** `Icons.Default.Favorite`, `Icons.Default.Security`.
+- **Visuals:** Edge-to-edge full-bleed background image with subtle bottom gradient scrim for button contrast.
 
 #### 3. Phone Entry Screen
 - **Route:** `phone_entry` (`Routes.PHONE_ENTRY`)
 - **File:** `ui/screens/auth/PhoneEntryScreen.kt`
-- **Description:** International phone number input with Country Code selector trigger.
+- **Description:** International phone number input with Country Code selector trigger button, validation for digit count, and privacy disclaimer.
 - **Navigations:**
-  - Back Button → navigates back to `Routes.LANDING`.
+  - Back Button → returns to `Routes.LANDING`.
   - Country Code selector tap → navigates to `Routes.COUNTRY_PICKER`.
-  - "Send Code" → saves phone in ViewModel and navigates to `Routes.OTP_VERIFY`.
-- **Buttons:** Country selector button, `GradientButton` ("Send Code").
+  - "Send Code" → saves phone in `SoulmateViewModel` and navigates to `Routes.OTP_VERIFY`.
+- **Buttons:** Country selector pill, `GradientButton` ("Send Code").
 - **Icons:** `Icons.AutoMirrored.Filled.ArrowBack`, `Icons.Default.Phone`.
 
 #### 4. Country Picker Screen
 - **Route:** `country_picker` (`Routes.COUNTRY_PICKER`)
 - **File:** `ui/screens/onboarding/CountryPickerScreen.kt`
-- **Description:** Searchable list of 200+ world countries with flags and dial codes.
+- **Description:** Searchable list of 200+ world countries with emoji flags, country names, and dial codes.
 - **Navigations:**
-  - Back Button → returns to `Routes.PHONE_ENTRY`.
-  - Country item tap → selects country in `SoulmateViewModel` and pops back to `Routes.PHONE_ENTRY`.
-- **Buttons:** Close button (`IconButton`), Country row tap target.
+  - Back Button → returns to calling screen (`Routes.PHONE_ENTRY` or `PhoneNumberScreen`).
+  - Country item tap → updates `selectedCountry` in `SoulmateViewModel` and pops back.
+- **Buttons:** Close button (`IconButton`), country list item rows.
 - **Icons:** `Icons.Default.Search`, `Icons.Default.Close`.
 
 #### 5. OTP Verification Screen
 - **Route:** `otp_verify` (`Routes.OTP_VERIFY`)
 - **File:** `ui/screens/auth/OtpVerifyScreen.kt`
-- **Description:** 6-digit PIN input with countdown timer and resend code action.
+- **Description:** 6-digit PIN input with countdown timer (30s), resend code trigger, animated checkmark transition on verification, and dedicated Verify button.
 - **Navigations:**
   - Back Button → returns to `Routes.PHONE_ENTRY`.
-  - "Verify" (or automatic 6-digit completion) → navigates to `Routes.BASIC_INFO`.
-  - "Resend Code" → resets 30-second timer.
-- **Buttons:** `GradientButton` ("Verify & Continue"), TextButton ("Resend Code").
-- **Icons:** `Icons.AutoMirrored.Filled.ArrowBack`, `Icons.Default.Lock`.
+  - "Verify" button (or automatic 6-digit completion) → sets `phoneVerified = true` in ViewModel and navigates to `Routes.BASIC_INFO`.
+  - "Change phone number" → returns to `Routes.PHONE_ENTRY`.
+- **Buttons:** `GradientButton` ("Verify"), TextButton ("Resend in 0:XXs").
+- **Icons:** `Icons.AutoMirrored.Filled.ArrowBack`, `Icons.Default.Lock`, `Icons.Default.Check`.
 
 ---
 
@@ -139,43 +156,43 @@ Below is the complete inventory of all 55 screens within the application, includ
 #### 6. Basic Info Screen
 - **Route:** `basic_info` (`Routes.BASIC_INFO`)
 - **File:** `ui/screens/profile_setup/BasicInfoScreen.kt`
-- **Description:** Step 1 of 5. Collects Full Name, Date of Birth (with age 18+ enforcement), and Gender.
+- **Description:** Step 1 of Onboarding. Collects Full Name, Date of Birth (with age 18+ requirement enforcement), and Gender selection.
 - **Navigations:**
   - Back Button → returns to `Routes.OTP_VERIFY`.
-  - Date of Birth field tap → triggers native Android `DatePickerDialog` (with M3 DatePicker fallback).
-  - "Continue" → validates required fields and navigates to `Routes.USERNAME`.
-- **Buttons:** Gender selection cards (`Man`, `Woman`, `Non-binary`), `GradientButton` ("Continue").
+  - Date of Birth field tap → triggers native Android `DatePickerDialog` (with fallback to `Routes.DATE_PICKER`).
+  - "Continue" → validates required inputs and navigates to `Routes.USERNAME`.
+- **Buttons:** Gender cards (`Man`, `Woman`, `Non-binary`), `GradientButton` ("Continue").
 - **Icons:** `Icons.Default.CalendarMonth`, `Icons.Default.Male`, `Icons.Default.Female`, `Icons.Default.Transgender`.
 
-#### 7. Date Picker Screen (Fallback Standalone)
+#### 7. Date Picker Screen (Standalone Fallback)
 - **Route:** `date_picker` (`Routes.DATE_PICKER`)
 - **File:** `ui/screens/profile_setup/DatePickerScreen.kt`
-- **Description:** Standalone date picker destination with calendar grid and age validation.
+- **Description:** Standalone date picker destination with calendar grid, month/year navigation, and age calculation.
 - **Navigations:**
-  - Back Button / "Confirm" → returns to `Routes.BASIC_INFO` with formatted date string.
+  - Back Button / "Confirm Date" → sets `dateOfBirth` in ViewModel and returns.
 - **Buttons:** `GradientButton` ("Confirm Date").
-- **Icons:** `Icons.Default.CalendarToday`.
+- **Icons:** `Icons.Default.CalendarToday`, `Icons.AutoMirrored.Filled.ArrowBack`.
 
 #### 8. Username Selection Screen
 - **Route:** `username` (`Routes.USERNAME`)
 - **File:** `ui/screens/profile_setup/UsernameScreen.kt`
-- **Description:** Step 2 of 5. Unique `@handle` selection with real-time format checking (3-20 chars, alphanumeric).
+- **Description:** Step 2 of Onboarding. Unique `@handle` selection with live validation (length, alphanumeric characters, availability).
 - **Navigations:**
   - Back Button → returns to `Routes.BASIC_INFO`.
-  - "Continue" → sets username in ViewModel and navigates to `Routes.PHOTOS`.
+  - "Continue" → updates `username` in ViewModel and navigates to `Routes.PHOTOS`.
 - **Buttons:** `GradientButton` ("Claim Username").
 - **Icons:** `Icons.Default.AlternateEmail`, `Icons.Default.CheckCircle`.
 
 #### 9. Photos Setup Screen
 - **Route:** `photos` (`Routes.PHOTOS`)
 - **File:** `ui/screens/profile_setup/PhotosSetupScreen.kt`
-- **Description:** Step 3 of 5. 6-slot photo grid requiring at least 2 photos to continue. Allows setting main photo and reordering.
+- **Description:** Step 3 of Onboarding. 6-slot photo grid requiring at least 2 photos to continue. Allows setting main photo and removing photos.
 - **Navigations:**
   - Back Button → returns to `Routes.USERNAME`.
   - Empty Slot tap → navigates to `Routes.ADD_PHOTO`.
-  - "Choose from Gallery" button → launches real Android PhotoPicker (`ActivityResultContracts.PickVisualMedia`).
-  - "Continue" (enabled when >= 2 photos) → navigates to `Routes.FACE_CAPTURE`.
-- **Buttons:** `SoulOutlinedButton` ("Choose from Gallery"), `GradientButton` ("Continue"), Remove Photo ("X") icon buttons.
+  - "Choose from Gallery" button → launches real Android Photo Picker (`ActivityResultContracts.PickVisualMedia`).
+  - "Continue" (enabled when >= 2 photos) → navigates to `Routes.ABOUT_YOU`.
+- **Buttons:** `SoulOutlinedButton` ("Choose from Gallery"), `GradientButton` ("Continue"), Remove ("X") icon buttons.
 - **Icons:** `Icons.Default.Add`, `Icons.Default.PhotoLibrary`, `Icons.Default.Delete`, `Icons.Default.Star`.
 
 #### 10. Add Photo Screen
@@ -184,30 +201,30 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Description:** Modal source chooser offering Gallery or Camera capture.
 - **Navigations:**
   - Back Button → returns to `Routes.PHOTOS`.
-  - "Choose from Gallery" card → launches real Android PhotoPicker (`PickVisualMedia`). On selection, returns photo URI and pops back.
-  - "Take Photo" card → launches device Camera (`TakePicturePreview`). On capture, writes bitmap to cache and pops back.
-- **Buttons:** `PhotoSourceCard` (Gallery), `PhotoSourceCard` (Camera).
+  - "Choose from Gallery" card → launches real Android Photo Picker (`PickVisualMedia`).
+  - "Take Photo" card → launches device Camera (`TakePicturePreview`).
+- **Buttons:** Source cards (`PhotoSourceCard`).
 - **Icons:** `Icons.Default.PhotoLibrary`, `Icons.Default.CameraAlt`.
 
 #### 11. Face Capture Screen
 - **Route:** `face_capture` (`Routes.FACE_CAPTURE`)
 - **File:** `ui/screens/profile_setup/FaceCaptureScreen.kt`
-- **Description:** Step 4 of 5. Selfie verification screen with face alignment oval guide. Directly integrates the real Android OS camera (`ActivityResultContracts.TakePicturePreview`) to snap a live selfie, plus an Android Photo Picker (`ActivityResultContracts.PickVisualMedia`) fallback to choose a selfie directly from device media. Captured images are compressed and stored to app cache and rendered inside the circular guide.
+- **Description:** Selfie verification screen with face alignment oval guide. Directly integrates native Android camera (`TakePicturePreview`) to snap a live selfie, plus Android Photo Picker (`PickVisualMedia`) fallback.
 - **Navigations:**
-  - Back Button → returns to `Routes.PHOTOS`.
-  - "Take Selfie (Camera)" → launches native device camera for real photo capture.
-  - "Choose from Gallery" → launches real Android photo picker modal (`PickVisualMedia`).
-  - "Use This" → saves captured image URI in ViewModel and navigates to `Routes.VERIFY_PROCESSING`.
-  - "Retake" → discards current image and resets camera capture prompt.
+  - Back Button → returns to calling screen (`PhotosSetupScreen` or `DashboardProfile`).
+  - "Take Selfie (Camera)" → launches native camera.
+  - "Choose from Gallery" → launches real photo picker.
+  - "Use This" → updates `capturedSelfie` in ViewModel and navigates to `Routes.VERIFY_PROCESSING`.
+  - "Retake" → resets photo capture prompt.
 - **Buttons:** `GradientButton` ("Take Selfie (Camera)"), `SoulOutlinedButton` ("Choose from Gallery"), `GradientButton` ("Use This"), `SoulOutlinedButton` ("Retake").
-- **Icons:** `Icons.Default.Person`, `Icons.Default.CameraAlt`, `Icons.AutoMirrored.Filled.ArrowBack`.
+- **Icons:** `Icons.Default.CameraAlt`, `Icons.Default.Person`, `Icons.AutoMirrored.Filled.ArrowBack`.
 
 #### 12. Verification Processing Screen
 - **Route:** `verify_processing` (`Routes.VERIFY_PROCESSING`)
 - **File:** `ui/screens/profile_setup/VerificationProcessingScreen.kt`
-- **Description:** Automated biometric analysis animation with 3 checklist items (Face Detected, Liveness Confirmed, Profile Match).
+- **Description:** Automated biometric analysis animation with 3 checklist items: Face Detected, Liveness Confirmed, Profile Match.
 - **Navigations:**
-  - Automatically transitions after completion to `Routes.VERIFY_SUCCESS`.
+  - Automatically transitions on completion to `Routes.VERIFY_SUCCESS`.
 - **Buttons:** None (automated pipeline).
 - **Icons:** `Icons.Default.Autorenew`, `Icons.Default.CheckCircle`.
 
@@ -216,47 +233,47 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **File:** `ui/screens/profile_setup/VerificationSuccessScreen.kt`
 - **Description:** Celebration screen showcasing the blue verified checkmark badge.
 - **Navigations:**
-  - "Continue Setup" → navigates to `Routes.ABOUT_YOU`.
-- **Buttons:** `GradientButton` ("Continue Setup").
+  - "Continue Setup" / "Go to Profile" → navigates to `Routes.DASHBOARD_PROFILE` or continues setup flow.
+- **Buttons:** `GradientButton` ("Continue").
 - **Icons:** `Icons.Default.Verified`, `Icons.Default.Check`.
 
 #### 14. About You Screen
 - **Route:** `about_you` (`Routes.ABOUT_YOU`)
 - **File:** `ui/screens/profile_setup/AboutYouScreen.kt`
-- **Description:** Step 5 of 5. Bio input (min 10 chars, max 500), interest chip selector (up to 10), and single-selection "Who are you looking for? *" (Men, Women, Non-binary, All).
+- **Description:** Step 4 of Onboarding. Bio input (up to 500 characters), interest chip selector (up to 10 interests), and single-selection "Who are you looking for? *" (Men, Women, Non-binary, All).
 - **Navigations:**
-  - Back Button → returns to `Routes.VERIFY_SUCCESS`.
-  - "Continue" → validates required fields (marked with `*`) and navigates to `Routes.PERMISSIONS`.
-- **Buttons:** Interest chips (`SoulChip`), `LookingForCard` (single selection), `GradientButton` ("Continue").
+  - Back Button → returns to `Routes.PHOTOS`.
+  - "Continue" → validates required fields and navigates to `Routes.PERMISSIONS`.
+- **Buttons:** Interest chips (`SoulChip`), `LookingForCard` selection cards, `GradientButton` ("Continue").
 - **Icons:** `Icons.Default.CheckCircle`, `Icons.AutoMirrored.Filled.ArrowBack`.
 
 #### 15. Permissions Screen
 - **Route:** `permissions` (`Routes.PERMISSIONS`)
 - **File:** `ui/screens/profile_setup/PermissionsScreen.kt`
-- **Description:** Final onboarding step requesting Location and Notification permissions. Tapping each permission card triggers the real Android OS permission request dialogs using Jetpack ActivityResult contracts (`ActivityResultContracts.RequestMultiplePermissions` for `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`, and `ActivityResultContracts.RequestPermission` for `POST_NOTIFICATIONS`).
+- **Description:** Final onboarding step requesting Location and Notification permissions via real Android Activity Result contracts (`RequestMultiplePermissions` for Location, `RequestPermission` for `POST_NOTIFICATIONS`).
 - **Navigations:**
   - Back Button → returns to `Routes.ABOUT_YOU`.
-  - Location Card Tap → launches native Android Location permission prompt (`ACCESS_FINE_LOCATION`).
-  - Notifications Card Tap → launches native Android Notification permission prompt (`POST_NOTIFICATIONS` on Android 13+).
-  - "Enter Soulmate" / "Skip for now" → triggers celebration confetti animation and navigates to `Routes.DASHBOARD` (clearing entire onboarding backstack).
-- **Buttons:** `PermissionCard` (Location), `PermissionCard` (Notifications), `GradientButton` ("Enter Soulmate"), `SoulTextButton` ("Skip for now").
+  - Location Card tap → triggers native Android location permission dialog.
+  - Notifications Card tap → triggers native Android notification permission dialog.
+  - "Enter Soulmate" / "Skip for now" → navigates to `Routes.DASHBOARD` (clearing entire onboarding backstack).
+- **Buttons:** `PermissionCard` (Location), `PermissionCard` (Notifications), `GradientButton` ("Enter Soulmate"), TextButton ("Skip for now").
 - **Icons:** `Icons.Default.LocationOn`, `Icons.Default.Notifications`, `Icons.Default.Check`.
 
 ---
 
 ### Group 3: Main Dashboard Container
 
-#### 16. Dashboard Screen
+#### 16. Dashboard Shell Screen
 - **Route:** `dashboard` (`Routes.DASHBOARD`)
 - **File:** `ui/screens/dashboard/DashboardScreen.kt`
-- **Description:** Main app container featuring a custom bottom navigation bar hosting 5 primary tabs:
+- **Description:** Main app container featuring a Tinder Pink (`#FD3A73`) bottom navigation bar hosting 5 primary tabs:
   1. **Explore:** `Routes.DASHBOARD_EXPLORE`
   2. **Chats:** `Routes.DASHBOARD_CHATS`
   3. **Friends:** `Routes.DASHBOARD_FRIENDS`
   4. **Settings:** `Routes.DASHBOARD_SETTINGS`
   5. **Profile:** `Routes.DASHBOARD_PROFILE`
-- **Navigations:** Tab switching updates the active sub-screen within the scaffold.
-- **Icons:** `Icons.Default.Explore`, `Icons.Default.Chat`, `Icons.Default.People`, `Icons.Default.Settings`, `Icons.Default.Person`.
+- **Navigations:** Tab switching updates active sub-screen within scaffold. Top app bar is styled in Tinder Pink (`#FD3A73`).
+- **Icons:** `Icons.Default.AutoAwesome`, `Icons.Default.ChatBubble`, `Icons.Default.People`, `Icons.Default.Settings`, `Icons.Default.Person`.
 
 ---
 
@@ -265,24 +282,25 @@ Below is the complete inventory of all 55 screens within the application, includ
 #### 17. Explore Screen
 - **Route:** `dashboard/explore` (`Routes.DASHBOARD_EXPLORE`)
 - **File:** `ui/screens/explore/ExploreScreen.kt`
-- **Description:** Core card swipe deck with segment switcher (Nearby / Country / Global). Drag cards left (pass) or right (like).
+- **Description:** Core card swipe deck with segment switcher (Nearby / Country / Global). Swipe left (pass), swipe right (like), superlike (star), and rewind.
+- **Top App Bar:** Tinder Pink (`#FD3A73`) background with white title "Explore", search icon, and filter icon.
 - **Navigations:**
-  - Filter Icon in header → navigates to `Routes.EXPLORE_FILTERS`.
-  - Search Icon in header → navigates to `Routes.EXPLORE_SEARCH`.
-  - Card Body tap → navigates to `Routes.EXPLORE_PROFILE_DETAIL` for the active user.
-  - Right Swipe / Like on matched user → opens `Routes.ITS_A_MATCH`.
-- **Buttons:** Pass Button ("X"), Superlike Button (Star), Like Button (Heart), Rewind Button.
-- **Icons:** `Icons.Default.Close`, `Icons.Default.Star`, `Icons.Default.Favorite`, `Icons.Default.FilterList`, `Icons.Default.Search`.
+  - Filter Icon in header → opens `FiltersScreen` (`ActiveSubScreen.Filters`).
+  - Search Icon in header → opens `UsernameSearchScreen` (`ActiveSubScreen.UsernameSearch`).
+  - Card Body tap → opens `FullProfileScreen` (`ActiveSubScreen.ExploreProfileDetail`).
+  - Right Swipe / Like on matched user → opens `ItsAMatchScreen` (`ActiveSubScreen.ItsAMatch`).
+- **Buttons:** Pass Button ("X"), Superlike Button (Star), Like Button (Heart), Rewind Button (Replay).
+- **Icons:** `Icons.Default.Close`, `Icons.Default.Star`, `Icons.Default.Favorite`, `Icons.Default.FilterList`, `Icons.Default.Search`, `Icons.Default.Replay`.
 
 #### 18. Filters Screen
 - **Route:** `explore/filters` (`Routes.EXPLORE_FILTERS`)
 - **File:** `ui/screens/explore/FiltersScreen.kt`
 - **Description:** Discovery preferences: Age Range slider (18-60), Maximum Distance slider (1-100 km), Interested In selector, Online Only and Verified Only toggles.
 - **Navigations:**
-  - Back Button / "Apply Filters" → applies filter state in ViewModel and pops back to Explore.
+  - Back Button / "Apply Filters" → applies filter state in ViewModel and returns to Explore deck.
   - "Reset" button → resets filters to defaults.
 - **Buttons:** `GradientButton` ("Apply Filters"), TextButton ("Reset").
-- **Icons:** `Icons.Default.Tune`, `Icons.Default.Check`.
+- **Icons:** `Icons.Default.Tune`, `Icons.Default.Check`, `Icons.AutoMirrored.Filled.ArrowBack`.
 
 #### 19. Full Profile Screen (Explore Detail)
 - **Route:** `explore/profile_detail` (`Routes.EXPLORE_PROFILE_DETAIL`)
@@ -290,30 +308,30 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Description:** Comprehensive profile view with photo carousel, verified badge, bio, lifestyle tags, astrological sign, job, education, and distance.
 - **Navigations:**
   - Back Button → returns to Explore deck.
-  - Like FAB → likes user and pops back (or triggers match).
-  - Pass FAB → passes user and pops back.
-  - "Send Friend Request" → sends request and shows confirmation toast.
-- **Buttons:** Floating Action Buttons (Like / Pass / Friend Request).
+  - Like FAB → likes user and returns to deck (or triggers match).
+  - Pass FAB → passes user and returns.
+  - "Send Friend Request" → sends request and displays confirmation.
+- **Buttons:** FABs (Like / Pass / Friend Request).
 - **Icons:** `Icons.Default.Favorite`, `Icons.Default.Close`, `Icons.Default.PersonAdd`, `Icons.Default.Verified`.
 
 #### 20. It's A Match Screen
 - **Route:** `explore/its_a_match` (`Routes.ITS_A_MATCH`)
 - **File:** `ui/screens/explore/ItsAMatchScreen.kt`
-- **Description:** Celebration screen shown when two users like each other. Features dual floating avatar circles and confetti animation.
+- **Description:** Celebration screen shown when two users like each other. Features dual floating avatar circles and celebratory graphics.
 - **Navigations:**
-  - "Send a Message" → navigates directly to `Routes.CHAT_THREAD` with the matched user.
-  - "Keep Swiping" → pops back to Explore deck.
+  - "Send a Message" → opens `ChatThreadScreen` with matched user.
+  - "Keep Swiping" → returns to Explore deck.
 - **Buttons:** `GradientButton` ("Send a Message"), `SoulOutlinedButton` ("Keep Swiping").
 - **Icons:** `Icons.Default.Favorite`, `Icons.Default.Chat`.
 
 #### 21. Username Search Screen
 - **Route:** `explore/search` (`Routes.EXPLORE_SEARCH`)
 - **File:** `ui/screens/explore/UsernameSearchScreen.kt`
-- **Description:** Live search bar to discover profiles by handle (e.g., `@maya`).
+- **Description:** Live search bar to discover profiles by handle (e.g. `@maya`).
 - **Navigations:**
   - Back Button → returns to Explore deck.
-  - Result row tap → sets selected user and navigates to `Routes.EXPLORE_PROFILE_DETAIL`.
-- **Buttons:** Clear search button, Result row tap targets.
+  - Result row tap → opens `FullProfileScreen` for that user.
+- **Buttons:** Clear search button, Result row tap target.
 - **Icons:** `Icons.Default.Search`, `Icons.Default.Close`, `Icons.AutoMirrored.Filled.ArrowBack`.
 
 ---
@@ -324,11 +342,13 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Route:** `dashboard/chats` (`Routes.DASHBOARD_CHATS`)
 - **File:** `ui/screens/chats/ChatListScreen.kt`
 - **Description:** Inbox with New Matches horizontal carousel and Conversation list showing last message, unread badges, and verified status.
+- **Top App Bar:** Tinder Pink (`#FD3A73`) background with white title "Chats" and new chat action icon.
 - **Navigations:**
-  - Tapping an unverified match → navigates to `Routes.CHAT_VERIFY_TO_UNLOCK`.
-  - Tapping an active conversation → sets active thread and navigates to `Routes.CHAT_THREAD`.
-- **Buttons:** Match avatar circles, Conversation item cards.
-- **Icons:** `Icons.Default.CheckCircle`, `Icons.Default.Lock`.
+  - Tapping unverified match → opens `VerifyToUnlockScreen`.
+  - Tapping active conversation → opens `ChatThreadScreen`.
+  - Long press on conversation → opens `ChatOptionsScreen`.
+- **Buttons:** Match avatar circles, conversation card rows.
+- **Icons:** `Icons.Default.CheckCircle`, `Icons.Default.Lock`, `Icons.Default.Add`.
 
 #### 23. Verify To Unlock Screen
 - **Route:** `chat/verify_to_unlock` (`Routes.CHAT_VERIFY_TO_UNLOCK`)
@@ -336,42 +356,44 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Description:** Safety gate informing users that face verification is required before chatting with verified members.
 - **Navigations:**
   - Back Button → returns to Chat List.
-  - "Verify Now" → navigates to `Routes.FACE_CAPTURE`.
-- **Buttons:** `GradientButton` ("Verify Now").
+  - "Verify Now" → navigates to `FaceCaptureScreen`.
+- **Buttons:** `GradientButton` ("Verify Now"), TextButton ("Maybe Later").
 - **Icons:** `Icons.Default.Shield`, `Icons.Default.Verified`.
 
 #### 24. Chat Thread Screen
 - **Route:** `chat/thread` (`Routes.CHAT_THREAD`)
 - **File:** `ui/screens/chats/ChatThreadScreen.kt`
 - **Description:** Real-time messaging screen with message bubbles, status ticks (sent, delivered, read), attachment button, and text field.
+- **Top App Bar:** Tinder Pink (`#FD3A73`) background with partner's avatar, name, and options button.
 - **Navigations:**
   - Back Button → returns to Chat List.
-  - Header avatar / name tap → navigates to `Routes.CHAT_INFO`.
-  - More options (3 vertical dots) → navigates to `Routes.CHAT_OPTIONS`.
-  - Attachment (+) button → navigates to `Routes.CHAT_ATTACHMENT`.
+  - Header avatar/name tap → opens `ChatInfoScreen`.
+  - More options (3 vertical dots) → opens `ChatOptionsScreen`.
+  - Attachment (+) button → opens `SendAttachmentScreen`.
 - **Buttons:** Send button (`IconButton`), Attachment button, Options menu button.
 - **Icons:** `Icons.AutoMirrored.Filled.Send`, `Icons.Default.AddPhotoAlternate`, `Icons.Default.MoreVert`, `Icons.Default.Verified`.
 
 #### 25. Chat Options Screen
 - **Route:** `chat/options` (`Routes.CHAT_OPTIONS`)
 - **File:** `ui/screens/chats/ChatOptionsScreen.kt`
-- **Description:** Action sheet with options: View Profile, Mute Notifications, Clear Chat, Block User, Report User.
+- **Description:** Action sheet with options: View Profile, Shared Media, Mute Notifications, Clear Chat, Block User, Report User, Delete Chat.
 - **Navigations:**
   - Back Button → returns to Chat Thread.
-  - "View Profile" → navigates to `Routes.EXPLORE_PROFILE_DETAIL`.
-  - "Block User" → adds user to blocked list and pops back to Chat List.
+  - "View Profile" → opens `FullProfileScreen`.
+  - "Shared Media & Files" → opens `ChatInfoScreen`.
+  - "Block User" / "Report User" → blocks user in ViewModel and returns to Chat List.
 - **Buttons:** Action list items.
-- **Icons:** `Icons.Default.Person`, `Icons.Default.NotificationsOff`, `Icons.Default.Block`, `Icons.Default.Report`.
+- **Icons:** `Icons.Default.Person`, `Icons.Default.NotificationsOff`, `Icons.Default.Block`, `Icons.Default.Report`, `Icons.Default.Delete`.
 
 #### 26. Chat Info Screen
 - **Route:** `chat/info` (`Routes.CHAT_INFO`)
 - **File:** `ui/screens/chats/ChatInfoScreen.kt`
-- **Description:** Contact card showing user photo, bio, shared media gallery, and safety settings.
+- **Description:** Contact card showing user photo, bio, shared media gallery, hairline dividers, and safety actions (Block / Report).
 - **Navigations:**
   - Back Button → returns to Chat Thread.
-  - "View Full Profile" → navigates to `Routes.EXPLORE_PROFILE_DETAIL`.
+  - "View Full Profile" → opens `FullProfileScreen`.
 - **Buttons:** `SoulOutlinedButton` ("View Full Profile"), Block/Mute buttons.
-- **Icons:** `Icons.Default.PermMedia`, `Icons.Default.Lock`.
+- **Icons:** `Icons.Default.PermMedia`, `Icons.Default.Lock`, `Icons.Default.Block`.
 
 #### 27. Blocked Users Screen
 - **Route:** `chat/blocked_users` (`Routes.BLOCKED_USERS`)
@@ -379,14 +401,14 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Description:** List of currently blocked accounts with option to unblock.
 - **Navigations:**
   - Back Button → returns to previous screen.
-  - "Unblock" button → removes from blocked list in ViewModel.
+  - "Unblock" button → removes user from blocked list in ViewModel.
 - **Buttons:** `SoulOutlinedButton` ("Unblock").
 - **Icons:** `Icons.Default.Block`, `Icons.AutoMirrored.Filled.ArrowBack`.
 
 #### 28. Send Attachment Screen
 - **Route:** `chat/attachment` (`Routes.CHAT_ATTACHMENT`)
 - **File:** `ui/screens/chats/SendAttachmentScreen.kt`
-- **Description:** Media attachment composer. Integrates real Android PhotoPicker (`ActivityResultContracts.PickVisualMedia`) for device gallery media and real Camera capture (`ActivityResultContracts.TakePicturePreview`) for snapping instant photos, provides preview with caption input, and attaches to conversation.
+- **Description:** Media attachment composer. Integrates real Android Photo Picker (`PickVisualMedia`) and real Camera capture (`TakePicturePreview`), provides preview with caption input, and attaches to conversation.
 - **Navigations:**
   - Back Button → returns to Chat Thread.
   - "Photo Gallery" → launches real Android Photo Picker (`PickVisualMedia`).
@@ -403,11 +425,12 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Route:** `dashboard/friends` (`Routes.DASHBOARD_FRIENDS`)
 - **File:** `ui/screens/friends/FriendsScreen.kt`
 - **Description:** Friends hub with tabs: "My Friends" (grid of established connections) and "Requests" (received and sent invitations).
+- **Top App Bar:** Tinder Pink (`#FD3A73`) background with white title "Friends" and "+" icon to discover new friends.
 - **Navigations:**
-  - Header "+" icon → navigates to `Routes.FIND_FRIENDS`.
-  - Friend card tap → navigates to `Routes.FRIEND_PROFILE`.
-  - Request card tap → navigates to `Routes.FRIEND_REQUEST_DETAIL`.
-- **Buttons:** Tab selector pills, "Accept" / "Decline" buttons on request cards.
+  - Header "+" icon → opens `FindFriendsScreen`.
+  - Friend card tap → opens `FriendProfileScreen`.
+  - Request card tap → opens `RequestDetailScreen`.
+- **Buttons:** Tab pills, "Accept" / "Decline" buttons on request cards.
 - **Icons:** `Icons.Default.PersonAdd`, `Icons.Default.Check`, `Icons.Default.Close`.
 
 #### 30. Friend Request Detail Screen
@@ -416,8 +439,8 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Description:** Full-screen inspection of a received friend request with sender's full bio, photos, and mutual interests.
 - **Navigations:**
   - Back Button → returns to Friends screen.
-  - "Accept Request" → moves user to Friends list and pops back.
-  - "Decline Request" → removes request and pops back.
+  - "Accept Request" → moves user to Friends list and returns.
+  - "Decline Request" → removes request and returns.
 - **Buttons:** `GradientButton` ("Accept Request"), `SoulOutlinedButton` ("Decline").
 - **Icons:** `Icons.Default.CheckCircle`, `Icons.Default.Cancel`.
 
@@ -427,8 +450,8 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Description:** Friend's full profile displaying connection anniversary, common interests, and direct message shortcut.
 - **Navigations:**
   - Back Button → returns to Friends screen.
-  - "Message" button → opens `Routes.CHAT_THREAD` with this friend.
-  - "Remove Friend" → confirms removal and pops back.
+  - "Message" button → opens `ChatThreadScreen` with this friend.
+  - "Remove Friend" → confirms removal and returns.
 - **Buttons:** `GradientButton` ("Send Message"), `SoulOutlinedButton` ("Remove Friend").
 - **Icons:** `Icons.Default.Chat`, `Icons.Default.PersonRemove`.
 
@@ -439,6 +462,7 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Navigations:**
   - Back Button → returns to Friends screen.
   - "Send Request" tap → sends request and updates button to "Requested".
+  - Profile avatar tap → opens `FullProfileScreen`.
 - **Buttons:** Request buttons on user items.
 - **Icons:** `Icons.Default.Search`, `Icons.Default.PersonAdd`.
 
@@ -450,8 +474,8 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Route:** `dashboard/settings` (`Routes.DASHBOARD_SETTINGS`)
 - **File:** `ui/screens/settings/SettingsScreen.kt`
 - **Description:** Categorized settings menu: Account, Matchmaking, Verification, Privacy, Notifications, Pro Plans, Terms, Community Rules, Logout, Delete Account.
-- **Navigations:**
-  - Menu items navigate to their respective sub-screens (detailed below).
+- **Top App Bar:** Tinder Pink (`#FD3A73`) background with white title "Settings".
+- **Navigations:** Menu rows navigate to each respective sub-screen.
 - **Icons:** `Icons.Default.Tune`, `Icons.Default.VerifiedUser`, `Icons.Default.Lock`, `Icons.Default.Notifications`, `Icons.Default.Star`, `Icons.Default.ExitToApp`, `Icons.Default.Delete`.
 
 #### 34. Matchmaking Settings Screen
@@ -465,10 +489,10 @@ Below is the complete inventory of all 55 screens within the application, includ
 #### 35. Verification Status Screen
 - **Route:** `settings/verification` (`Routes.SETTINGS_VERIFICATION`)
 - **File:** `ui/screens/settings/VerificationStatusScreen.kt`
-- **Description:** Displays user's verification badge status (Active Verified vs. Unverified) with security benefits explanation.
+- **Description:** Displays user's verification badge status (Active Verified vs. Unverified) with security benefits breakdown.
 - **Navigations:**
   - Back Button → returns to Settings Hub.
-  - "Re-Verify Face" → navigates to `Routes.FACE_CAPTURE`.
+  - "Re-Verify Face" / "Verify Now" → navigates to `FaceCaptureScreen`.
 - **Buttons:** `GradientButton` ("Re-Verify Face").
 - **Icons:** `Icons.Default.Verified`, `Icons.Default.Security`.
 
@@ -502,7 +526,7 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Route:** `settings/terms` (`Routes.SETTINGS_TERMS`)
 - **File:** `ui/screens/settings/TermsScreen.kt`
 - **Description:** Comprehensive Terms of Service, Privacy Policy, and Community Guidelines.
-- **Navigations:** Back Button → returns to Settings Hub (or Landing Screen).
+- **Navigations:** Back Button → returns to Settings Hub.
 - **Icons:** `Icons.AutoMirrored.Filled.ArrowBack`, `Icons.Default.Gavel`.
 
 #### 40. Community Rules Screen
@@ -517,19 +541,19 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **File:** `ui/screens/settings/AccountSettingsScreen.kt`
 - **Description:** Account overview displaying linked Phone, Username, and Email.
 - **Navigations:**
-  - Phone Row → navigates to `Routes.SETTINGS_PHONE`.
-  - Username Row → navigates to `Routes.SETTINGS_USERNAME`.
-  - Email Row → navigates to `Routes.SETTINGS_EMAIL`.
-  - Logout Row → navigates to `Routes.SETTINGS_LOGOUT_CONFIRM`.
-  - Delete Account Row → navigates to `Routes.SETTINGS_DELETE_ACCOUNT`.
+  - Phone Row → opens `PhoneNumberScreen`.
+  - Username Row → opens `EditUsernameScreen`.
+  - Email Row → opens `EmailScreen`.
+  - Logout Row → opens `LogoutConfirmationScreen`.
+  - Delete Account Row → opens `DeleteAccountScreen`.
 - **Icons:** `Icons.Default.Phone`, `Icons.Default.AlternateEmail`, `Icons.Default.Email`, `Icons.Default.ExitToApp`.
 
 #### 42. Logout Confirmation Screen
 - **Route:** `settings/logout_confirm` (`Routes.SETTINGS_LOGOUT_CONFIRM`)
 - **File:** `ui/screens/settings/LogoutConfirmationScreen.kt`
-- **Description:** Confirmation modal to safely sign out of the current device.
+- **Description:** Confirmation modal to safely sign out of current device.
 - **Navigations:**
-  - "Cancel" → pops back to Account Settings.
+  - "Cancel" → returns to Account Settings.
   - "Log Out" → clears active session and navigates to `Routes.LANDING`.
 - **Buttons:** `GradientButton` ("Log Out"), `SoulOutlinedButton` ("Cancel").
 - **Icons:** `Icons.Default.ExitToApp`, `Icons.Default.Warning`.
@@ -539,7 +563,7 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **File:** `ui/screens/settings/DeleteAccountScreen.kt`
 - **Description:** Irreversible account deletion flow with reason selector and "DELETE" text confirmation input.
 - **Navigations:**
-  - "Keep My Account" → pops back to Account Settings.
+  - "Keep My Account" → returns to Account Settings.
   - "Permanently Delete" (enabled only when user types "DELETE") → wipes state and navigates to `Routes.LANDING`.
 - **Buttons:** Red Delete Button, `SoulOutlinedButton` ("Keep My Account").
 - **Icons:** `Icons.Default.DeleteForever`, `Icons.Default.Warning`.
@@ -576,19 +600,20 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **Route:** `dashboard/profile` (`Routes.DASHBOARD_PROFILE`)
 - **File:** `ui/screens/profile/MyProfileScreen.kt`
 - **Description:** User profile overview showing profile photo, completion progress bar (e.g. 85%), quick-action buttons, bio preview, and interest chips.
+- **Top App Bar:** Tinder Pink (`#FD3A73`) background with white title "Profile" and settings shortcut icon.
 - **Navigations:**
-  - "Edit Photos" → navigates to `Routes.PROFILE_EDIT_PHOTOS`.
-  - "Edit Basic Info" → navigates to `Routes.PROFILE_EDIT_BASIC`.
-  - "Edit Username" → navigates to `Routes.PROFILE_EDIT_USERNAME`.
-  - "Edit About Me" → navigates to `Routes.PROFILE_EDIT_ABOUT`.
-  - "Preview" → navigates to `Routes.PROFILE_PREVIEW`.
+  - "Edit Photos" → opens `EditPhotosScreen`.
+  - "Edit Basic Info" → opens `EditBasicInfoScreen`.
+  - "Edit Username" → opens `EditUsernameScreen`.
+  - "Edit About Me" → opens `EditAboutScreen`.
+  - "Preview" → opens `PreviewProfileScreen`.
 - **Buttons:** Edit buttons, Preview Button (`SoulOutlinedButton`).
 - **Icons:** `Icons.Default.Edit`, `Icons.Default.PhotoCamera`, `Icons.Default.Visibility`, `Icons.Default.Verified`.
 
 #### 48. Edit Photos Screen
 - **Route:** `profile/edit_photos` (`Routes.PROFILE_EDIT_PHOTOS`)
 - **File:** `ui/screens/profile/EditPhotosScreen.kt`
-- **Description:** Manage 6 profile photos. Tapping empty slot launches real Android PhotoPicker (`PickVisualMedia`). Tapping an existing photo sets it as Main. Includes built-in Photo Crop & Adjustment view.
+- **Description:** Manage 6 profile photos. Tapping empty slot launches real Android Photo Picker (`PickVisualMedia`). Tapping an existing photo sets it as Main. Includes built-in Photo Crop & Adjustment view.
 - **Navigations:**
   - Back Button / "Save Changes" → persists photo ordering in ViewModel and returns to My Profile.
   - Photo Picker → opens real system gallery via `PickVisualMedia`.
@@ -626,22 +651,25 @@ Below is the complete inventory of all 55 screens within the application, includ
 #### 52. Loading Screen
 - **Route:** `system/loading` (`Routes.SYSTEM_LOADING`)
 - **File:** `ui/screens/system/LoadingScreen.kt`
-- **Description:** Reusable shimmer skeleton loading state (`ShimmerBox`) used during network simulation and cold transitions.
+- **Description:** Reusable shimmer skeleton loading state (`ShimmerBox`) used during network transitions.
+- **Navigations:** Back Button → pops back.
 - **Icons:** Shimmer gradients.
 
 #### 53. Error Screen
 - **Route:** `system/error` (`Routes.SYSTEM_ERROR`)
 - **File:** `ui/screens/system/ErrorScreen.kt`
-- **Description:** Graceful error recovery screen with error illustration and "Try Again" action.
-- **Navigations:** "Try Again" → executes retry callback or returns to `Routes.DASHBOARD`.
-- **Buttons:** `GradientButton` ("Try Again").
+- **Description:** Graceful error recovery screen with error illustration and "Try Again" / "Go Home" actions.
+- **Navigations:**
+  - "Try Again" → executes retry callback and pops back.
+  - "Go Home" → navigates to `Routes.DASHBOARD`.
+- **Buttons:** `GradientButton` ("Try Again"), `SoulOutlinedButton` ("Go to Dashboard").
 - **Icons:** `Icons.Default.ErrorOutline`, `Icons.Default.Refresh`.
 
 #### 54. No Internet Screen
 - **Route:** `system/no_internet` (`Routes.SYSTEM_NO_INTERNET`)
 - **File:** `ui/screens/system/NoInternetScreen.kt`
 - **Description:** Offline state display informing users that an active network connection is required.
-- **Navigations:** "Check Connection" → tests connectivity and resumes applet.
+- **Navigations:** "Check Connection" / "Try Again" → tests connectivity and resumes.
 - **Buttons:** `GradientButton` ("Check Connection").
 - **Icons:** `Icons.Default.WifiOff`, `Icons.Default.Refresh`.
 
@@ -650,16 +678,102 @@ Below is the complete inventory of all 55 screens within the application, includ
 - **File:** `ui/screens/system/LocationRequiredScreen.kt`
 - **Description:** Full-screen rationale explaining why location is required to calculate accurate proximity for soulmate matches.
 - **Navigations:**
-  - "Enable Location" → launches permission prompt or navigates back to Explore.
+  - "Enable Location" → launches permission prompt or returns.
   - "Browse Country-Wide" → falls back to country-wide discovery without GPS.
 - **Buttons:** `GradientButton` ("Enable Location"), `SoulOutlinedButton` ("Browse Country-Wide").
 - **Icons:** `Icons.Default.LocationOff`, `Icons.Default.NearMe`.
 
+#### 56. Maintenance Screen
+- **Route:** `system/maintenance` (`Routes.SYSTEM_MAINTENANCE`)
+- **File:** `ui/screens/system/MaintenanceScreen.kt`
+- **Description:** Routine maintenance screen informing users about platform algorithm enhancements and connection security updates.
+- **Navigations:**
+  - "Try Again" → triggers refresh and pops back.
+  - Back Button → pops back.
+- **Buttons:** `GradientButton` ("Try Again").
+- **Icons:** `Icons.Default.Build`, `Icons.AutoMirrored.Filled.ArrowBack`.
+
 ---
 
-## 5. Exhaustive Breakdown of Real Android OS/SDK Implementations vs. External Services
+## 5. Navigation Summary & Graph Flow
 
-This section explicitly documents which parts of the application utilize real native Android OS / SDK capabilities versus client-side state / external services.
+```
+[SplashScreen] (2s timer)
+       │
+       ▼
+[LandingScreen] (Full-screen background image, Get Started button)
+       │
+       ▼
+[PhoneEntryScreen] ◄───► [CountryPickerScreen]
+       │
+       ▼
+[OtpVerifyScreen] (6-digit code, Resend timer, Verify button)
+       │
+       ▼
+[BasicInfoScreen] ◄───► [DatePickerDialog / Standalone DatePickerScreen]
+       │
+       ▼
+[UsernameScreen]
+       │
+       ▼
+[PhotosSetupScreen] ◄───► [AddPhotoScreen] (Real Android PhotoPicker & Camera)
+       │
+       ▼
+[AboutYouScreen] (Bio, Interests, Who are you looking for?)
+       │
+       ▼
+[PermissionsScreen] (Real Android System Permissions: Location & Notifications)
+       │
+       ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════╗
+║                      DASHBOARD HUB (Header & Nav Bar: Tinder Pink #FD3A73)                ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════╣
+║ 1. Explore Tab:                                                                           ║
+║    ExploreScreen ──► FiltersScreen                                                        ║
+║                  ──► FullProfileScreen                                                    ║
+║                  ──► ItsAMatchScreen ──► ChatThreadScreen                                 ║
+║                  ──► UsernameSearchScreen                                                 ║
+║                                                                                           ║
+║ 2. Chats Tab:                                                                             ║
+║    ChatListScreen ──► VerifyToUnlockScreen ──► FaceCaptureScreen                          ║
+║                   ──► ChatThreadScreen ──► ChatOptionsScreen                              ║
+║                                        ──► ChatInfoScreen                                 ║
+║                                        ──► SendAttachmentScreen (Real Media Picker/Camera)║
+║                   ──► BlockedUsersScreen                                                  ║
+║                                                                                           ║
+║ 3. Friends Tab:                                                                           ║
+║    FriendsScreen ──► FindFriendsScreen                                                    ║
+║                  ──► RequestDetailScreen                                                  ║
+║                  ──► FriendProfileScreen ──► ChatThreadScreen                             ║
+║                                                                                           ║
+║ 4. Settings Tab:                                                                          ║
+║    SettingsScreen ──► MatchmakingScreen                                                   ║
+║                   ──► VerificationStatusScreen ──► FaceCaptureScreen                      ║
+║                   ──► PrivacySettingsScreen                                               ║
+║                   ──► NotificationSettingsScreen                                          ║
+║                   ──► ProPlansScreen                                                      ║
+║                   ──► TermsScreen                                                         ║
+║                   ──► CommunityRulesScreen                                                ║
+║                   ──► AccountSettingsScreen ──► PhoneNumberScreen                         ║
+║                                             ──► EditUsernameScreen                        ║
+║                                             ──► EmailScreen                               ║
+║                                             ──► LogoutConfirmationScreen ──► LandingScreen║
+║                                             ──► DeleteAccountScreen ───────► LandingScreen║
+║                                                                                           ║
+║ 5. Profile Tab:                                                                           ║
+║    MyProfileScreen ──► EditPhotosScreen (Real PhotoPicker & 3:4 Crop)                     ║
+║                    ──► EditBasicInfoScreen                                                ║
+║                    ──► EditUsernameScreen                                                 ║
+║                    ──► EditAboutScreen                                                    ║
+║                    ──► PreviewProfileScreen                                               ║
+║                    ──► FaceCaptureScreen (Selfie Verification) ──► VerificationProcessing ║
+║                                                                ──► VerificationSuccess    ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+---
+
+## 6. Real Android OS/SDK Implementations vs. External Services
 
 > **CRITICAL ARCHITECTURAL GUARANTEE — ZERO DUMMY MEDIA PICKERS:**
 > There are **NO dummy gallery image pickers or dummy camera pickers anywhere in this application**. Every screen where an image or photo can be selected or captured utilizes genuine Android Jetpack Activity Result contracts (`ActivityResultContracts.PickVisualMedia`, `ActivityResultContracts.TakePicturePreview`). Device storage, photo gallery, and hardware camera are directly interfaced with zero mock UI pickers.
@@ -685,9 +799,9 @@ This section explicitly documents which parts of the application utilize real na
 6. **Edge-to-Edge System Window Insets:**
    - **Where:** `MainActivity.kt` and all screens.
    - **How it works:** Zero-clipping edge-to-edge support with `statusBarsPadding()`, `navigationBarsPadding()`, and `imePadding()` ensuring seamless integration on gesture-nav and 3-button devices.
-7. **Complete Header & Navigation Bar Color System:**
+7. **Tinder Pink Header & Navigation Bar Color System:**
    - **Where:** `NavComponents.kt`, `Color.kt`, all dashboard screens and sub-screens.
-   - **How it works:** Rose Blush (`#FBE9F1`) top bar header, Lavender Mist (`#F3E8FF`) bottom nav bar, Warm Cream (`#FFF7F2`) body canvas. Pure white (`#FFFFFF`) is strictly disallowed on headers and nav bars.
+   - **How it works:** Tinder Pink (`#FD3A73`) top bar header, Tinder Pink (`#FD3A73`) bottom nav bar, Warm Cream (`#FFF7F2`) body canvas. Pure white (`#FFFFFF`) is strictly disallowed on headers and nav bars.
 
 ---
 
@@ -708,87 +822,32 @@ The app is built as a complete, fully functional self-contained client. Below is
 
 ---
 
-## 6. Navigation Summary & Graph Flow
+## 7. TestTags & Accessibility Directory
 
-```
-[SplashScreen] (2s timer)
-       │
-       ▼
-[LandingScreen]
-       │
-       ▼
-[PhoneEntryScreen] ◄───► [CountryPickerScreen]
-       │
-       ▼
-[OtpVerifyScreen]
-       │
-       ▼
-[BasicInfoScreen] ◄───► [DatePickerDialog]
-       │
-       ▼
-[UsernameScreen]
-       │
-       ▼
-[PhotosSetupScreen] ◄───► [AddPhotoScreen] (Real Android PhotoPicker & Camera)
-       │
-       ▼
-[FaceCaptureScreen] (Real Android Camera & PhotoPicker)
-       │
-       ▼
-[VerificationProcessingScreen] (Biometric Analysis Pipeline)
-       │
-       ▼
-[VerificationSuccessScreen]
-       │
-       ▼
-[AboutYouScreen] (Bio *, Interests *, Who are you looking for? *)
-       │
-       ▼
-[PermissionsScreen] (Real Android System Permissions)
-       │
-       ▼
-╔═════════════════════════════════════════════════════════════════════════╗
-║                            DASHBOARD HUB                                ║
-╠═════════════════════════════════════════════════════════════════════════╣
-║ 1. Explore Tab:                                                         ║
-║    ExploreScreen ──► FiltersScreen                                      ║
-║                  ──► FullProfileScreen                                  ║
-║                  ──► ItsAMatchScreen ──► ChatThreadScreen               ║
-║                  ──► UsernameSearchScreen                               ║
-║                                                                         ║
-║ 2. Chats Tab:                                                           ║
-║    ChatListScreen ──► VerifyToUnlockScreen                              ║
-║                   ──► ChatThreadScreen ──► ChatOptionsScreen            ║
-║                                        ──► ChatInfoScreen               ║
-║                                        ──► SendAttachmentScreen (Picker)║
-║                   ──► BlockedUsersScreen                                ║
-║                                                                         ║
-║ 3. Friends Tab:                                                         ║
-║    FriendsScreen ──► FindFriendsScreen                                  ║
-║                  ──► RequestDetailScreen                                ║
-║                  ──► FriendProfileScreen ──► ChatThreadScreen           ║
-║                                                                         ║
-║ 4. Settings Tab:                                                        ║
-║    SettingsScreen ──► MatchmakingScreen                                 ║
-║                   ──► VerificationStatusScreen                          ║
-║                   ──► PrivacySettingsScreen                             ║
-║                   ──► NotificationSettingsScreen                        ║
-║                   ──► ProPlansScreen                                    ║
-║                   ──► TermsScreen                                       ║
-║                   ──► AccountSettingsScreen ──► PhoneNumberScreen       ║
-║                                             ──► EditUsernameScreen      ║
-║                                             ──► EmailScreen             ║
-║                                             ──► LogoutConfirmScreen     ║
-║                                             ──► DeleteAccountScreen     ║
-║                                                                         ║
-║ 5. Profile Tab:                                                         ║
-║    MyProfileScreen ──► EditPhotosScreen (Real PhotoPicker & Crop)       ║
-║                    ──► EditBasicInfoScreen                              ║
-║                    ──► EditUsernameScreen                               ║
-║                    ──► EditAboutScreen                                  ║
-║                    ──► PreviewProfileScreen                             ║
-╚═════════════════════════════════════════════════════════════════════════╝
-```
+Every interactive element includes explicit `Modifier.testTag` identifiers adhering to snake_case naming conventions:
+
+- **Auth & Onboarding:**
+  - `phone_input`, `country_picker_trigger`, `send_code_button`
+  - `otp_input_row`, `otp_cell_0` to `otp_cell_5`, `verify_otp_button`, `resend_otp_button`
+  - `name_input`, `dob_input`, `gender_man`, `gender_woman`, `gender_nonbinary`
+  - `username_input`, `photos_grid`, `add_photo_slot_0` to `slot_5`
+  - `face_capture_camera_button`, `face_capture_gallery_button`
+  - `bio_input`, `looking_for_men`, `looking_for_women`, `looking_for_everyone`
+  - `permission_location_card`, `permission_notifications_card`, `enter_soulmate_button`
+- **Dashboard & Explore:**
+  - `dashboard_screen`, `explore_screen`, `explore_deck`
+  - `explore_search_icon`, `explore_filter_icon`
+  - `action_pass_button`, `action_like_button`, `action_superlike_button`, `action_rewind_button`
+  - `nav_tab_explore`, `nav_tab_chats`, `nav_tab_friends`, `nav_tab_settings`, `nav_tab_profile`
+- **Chats & Messaging:**
+  - `chat_list`, `chat_thread_list`, `chat_input_field`, `chat_send_button`, `chat_attachment_button`
+  - `chat_options_button`, `chat_info_avatar`
+- **Friends & Social:**
+  - `friends_tab_list`, `friend_requests_list`, `find_friends_button`
+- **Settings:**
+  - `settings_account_row`, `settings_matchmaking_row`, `settings_verification_row`
+  - `settings_privacy_row`, `settings_notifications_row`, `settings_pro_plans_row`
+  - `settings_logout_button`, `settings_delete_account_button`
 
 ---
-*Document generated on October 14, 2026 for Soulmate Android Applet.*
+*Document updated on October 14, 2026 for Soulmate Android Applet.*

@@ -39,7 +39,9 @@ import com.example.ui.components.SoulAvatar
 import com.example.ui.components.SoulOutlinedButton
 import com.example.ui.components.SoulTopBar
 import com.example.ui.theme.AppBackground
+import com.example.ui.theme.CardBackground
 import com.example.ui.theme.ElevatedSurface
+import com.example.ui.theme.HairlineDivider
 import com.example.ui.theme.InterFontFamily
 import com.example.ui.theme.OrchidPrimary
 import com.example.ui.theme.PillShape
@@ -83,7 +85,7 @@ fun BlockedUsersScreen(
                             .size(80.dp)
                             .clip(CircleShape)
                             .background(ElevatedSurface)
-                            .border(1.5.dp, Color(0xFF000000), CircleShape),
+                            .border(1.5.dp, HairlineDivider, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -126,10 +128,10 @@ fun BlockedUsersScreen(
                 items(blockedUsers, key = { it.id }) { user ->
                     Card(
                         shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = CardBackground),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.5.dp, Color(0xFF000000), RoundedCornerShape(18.dp))
+                            .border(1.5.dp, HairlineDivider, RoundedCornerShape(18.dp))
                     ) {
                         Row(
                             modifier = Modifier

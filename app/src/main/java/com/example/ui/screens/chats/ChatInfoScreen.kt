@@ -50,10 +50,12 @@ import com.example.ui.components.VerifiedBadge
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.CardBackground
 import com.example.ui.theme.ElevatedSurface
+import com.example.ui.theme.HairlineDivider
 import com.example.ui.theme.InterFontFamily
 import com.example.ui.theme.OrchidPrimary
 import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.RosePrimary
+import com.example.ui.theme.SemanticError
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
@@ -100,7 +102,7 @@ fun ChatInfoScreen(
                     modifier = Modifier
                         .size(120.dp)
                         .clip(CircleShape)
-                        .border(2.5.dp, Color(0xFF000000), CircleShape)
+                        .border(2.5.dp, HairlineDivider, CircleShape)
                 )
 
                 if (user.verified) {
@@ -148,7 +150,7 @@ fun ChatInfoScreen(
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.5.dp, Color(0xFF000000), RoundedCornerShape(20.dp))
+                    .border(1.5.dp, HairlineDivider, RoundedCornerShape(20.dp))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -177,7 +179,7 @@ fun ChatInfoScreen(
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.5.dp, Color(0xFF000000), RoundedCornerShape(20.dp))
+                    .border(1.5.dp, HairlineDivider, RoundedCornerShape(20.dp))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -197,7 +199,7 @@ fun ChatInfoScreen(
                                 modifier = Modifier
                                     .size(80.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .border(1.dp, Color(0xFF000000), RoundedCornerShape(12.dp))
+                                    .border(1.dp, HairlineDivider, RoundedCornerShape(12.dp))
                             )
                         }
                     }
@@ -212,7 +214,7 @@ fun ChatInfoScreen(
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.5.dp, Color(0xFF000000), RoundedCornerShape(20.dp))
+                    .border(1.5.dp, HairlineDivider, RoundedCornerShape(20.dp))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -241,15 +243,15 @@ fun ChatInfoScreen(
                         .weight(1f)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFFFEF2F2))
-                        .border(1.5.dp, Color(0xFFEF4444), RoundedCornerShape(16.dp))
+                        .border(1.5.dp, SemanticError, RoundedCornerShape(16.dp))
                         .clickable { onBlockClick() }
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Block, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Default.Block, contentDescription = null, tint = SemanticError, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "Block", fontFamily = PoppinsFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFFDC2626))
+                        Text(text = "Block", fontFamily = PoppinsFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = SemanticError)
                     }
                 }
 
@@ -258,15 +260,15 @@ fun ChatInfoScreen(
                         .weight(1f)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFFFEF2F2))
-                        .border(1.5.dp, Color(0xFFEF4444), RoundedCornerShape(16.dp))
+                        .border(1.5.dp, SemanticError, RoundedCornerShape(16.dp))
                         .clickable { onReportClick() }
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = SemanticError, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "Report", fontFamily = PoppinsFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFFDC2626))
+                        Text(text = "Report", fontFamily = PoppinsFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = SemanticError)
                     }
                 }
             }
@@ -287,8 +289,8 @@ private fun QuickActionButton(
             modifier = Modifier
                 .size(52.dp)
                 .clip(CircleShape)
-                .background(Color.White)
-                .border(1.5.dp, Color(0xFF000000), CircleShape)
+                .background(CardBackground)
+                .border(1.5.dp, HairlineDivider, CircleShape)
                 .clickable { onClick() },
             contentAlignment = Alignment.Center
         ) {

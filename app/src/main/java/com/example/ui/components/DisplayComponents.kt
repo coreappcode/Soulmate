@@ -107,11 +107,13 @@ fun SoulChip(
             .clip(PillShape)
             .then(
                 if (selected) {
-                    Modifier.background(AuroraHorizontalGradient)
+                    Modifier
+                        .background(AuroraHorizontalGradient)
+                        .border(1.5.dp, AuroraHorizontalGradient, PillShape)
                 } else {
                     Modifier
                         .background(AppBackground)
-                        .border(1.dp, BorderSubtle, PillShape)
+                        .border(1.dp, HairlineDivider, PillShape)
                 }
             )
             .clickable(onClick = onClick)
@@ -205,7 +207,7 @@ fun SoulAvatar(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(CircleShape)
-                .border(2.dp, BorderSubtle, CircleShape)
+                .border(2.dp, HairlineDivider, CircleShape)
         )
 
         if (showOnlineDot) {

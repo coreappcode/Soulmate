@@ -69,6 +69,7 @@ import com.example.ui.theme.BorderFocus
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.CardBackground
 import com.example.ui.theme.ElevatedSurface
+import com.example.ui.theme.HairlineDivider
 import com.example.ui.theme.InputShape
 import com.example.ui.theme.InterFontFamily
 import com.example.ui.theme.OrchidPrimary
@@ -121,10 +122,14 @@ fun SoulTextField(
                 onValueChange = onValueChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(
-                        width = 2.dp,
-                        color = if (isError) SemanticError else Color(0xFF000000),
-                        shape = InputShape
+                    .then(
+                        if (isError) {
+                            Modifier.border(2.dp, SemanticError, InputShape)
+                        } else if (isFocused) {
+                            Modifier.border(2.dp, AuroraHorizontalGradient, InputShape)
+                        } else {
+                            Modifier.border(1.5.dp, HairlineDivider, InputShape)
+                        }
                     )
                     .onFocusChanged { isFocused = it.isFocused }
                     .testTag("input_${label.lowercase().replace(" ", "_")}"),
@@ -194,18 +199,20 @@ fun PhoneInput(
     isError: Boolean = false,
     supportingText: String? = null
 ) {
+    var isPhoneFocused by remember { mutableStateOf(false) }
+
     Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Country dial code button with solid 2dp black border
+            // Country dial code button
             Row(
                 modifier = Modifier
                     .height(56.dp)
                     .clip(InputShape)
                     .background(Color.White)
-                    .border(2.dp, Color(0xFF000000), InputShape)
+                    .border(1.5.dp, HairlineDivider, InputShape)
                     .clickable { onCountryTap() }
                     .padding(horizontal = 14.dp)
                     .testTag("country_code_selector"),
@@ -234,7 +241,7 @@ fun PhoneInput(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Phone number text field with solid 2dp black border
+            // Phone number text field
             OutlinedTextField(
                 value = phoneNumber,
                 onValueChange = { input ->
@@ -273,11 +280,16 @@ fun PhoneInput(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
-                    .border(
-                        width = 2.dp,
-                        color = if (isError) SemanticError else Color(0xFF000000),
-                        shape = InputShape
+                    .then(
+                        if (isError) {
+                            Modifier.border(2.dp, SemanticError, InputShape)
+                        } else if (isPhoneFocused) {
+                            Modifier.border(2.dp, AuroraHorizontalGradient, InputShape)
+                        } else {
+                            Modifier.border(1.5.dp, HairlineDivider, InputShape)
+                        }
                     )
+                    .onFocusChanged { isPhoneFocused = it.isFocused }
                     .testTag("phone_number_input")
             )
         }
@@ -355,8 +367,6 @@ fun OtpInput(
                 val isFilled = digit.isNotEmpty()
 
                 val boxShape = RoundedCornerShape(16.dp)
-                val borderColor = if (isError) SemanticError else Color(0xFF000000)
-                val borderWidth = if (isCurrentBox || isError) 2.5.dp else 2.dp
                 val bgColor = if (isError) ElevatedSurface else Color.White
 
                 Box(
@@ -364,10 +374,14 @@ fun OtpInput(
                         .size(width = 48.dp, height = 62.dp)
                         .clip(boxShape)
                         .background(bgColor)
-                        .border(
-                            width = borderWidth,
-                            color = borderColor,
-                            shape = boxShape
+                        .then(
+                            if (isError) {
+                                Modifier.border(2.dp, SemanticError, boxShape)
+                            } else if (isCurrentBox) {
+                                Modifier.border(2.dp, AuroraHorizontalGradient, boxShape)
+                            } else {
+                                Modifier.border(1.5.dp, HairlineDivider, boxShape)
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -378,7 +392,7 @@ fun OtpInput(
                             fontWeight = FontWeight.Bold,
                             fontSize = 26.sp,
                             textAlign = TextAlign.Center,
-                            color = Color(0xFF000000)
+                            color = TextPrimary
                         )
                     } else if (isCurrentBox) {
                         Box(
@@ -386,7 +400,7 @@ fun OtpInput(
                                 .width(2.5.dp)
                                 .height(26.dp)
                                 .alpha(cursorAlpha)
-                                .background(Color(0xFF000000), RoundedCornerShape(1.dp))
+                                .background(OrchidPrimary, RoundedCornerShape(1.dp))
                         )
                     }
                 }
@@ -438,7 +452,7 @@ fun SoulSearchBar(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
-                tint = Color(0xFF000000)
+                tint = TextSecondary
             )
         },
         trailingIcon = {
@@ -471,7 +485,7 @@ fun SoulSearchBar(
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp)
-            .border(2.dp, Color(0xFF000000), PillShape)
+            .border(1.5.dp, HairlineDivider, PillShape)
             .testTag("search_bar")
     )
 }
