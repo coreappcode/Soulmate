@@ -67,11 +67,29 @@ fun SendAttachmentScreen(
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var captionText by remember { mutableStateOf("") }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
             selectedImageUri = uri
+        }
+    }
+
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: android.graphics.Bitmap? ->
+        if (bitmap != null) {
+            try {
+                val photoFile = java.io.File(context.cacheDir, "chat_snap_${System.currentTimeMillis()}.jpg")
+                java.io.FileOutputStream(photoFile).use { out ->
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)
+                }
+                selectedImageUri = Uri.fromFile(photoFile)
+            } catch (e: Exception) {
+                // Ignore
+            }
         }
     }
 
@@ -157,9 +175,7 @@ fun SendAttachmentScreen(
                         title = "Take Instant Photo",
                         description = "Capture an authentic live moment",
                         onClick = {
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
+                            takePictureLauncher.launch(null)
                         }
                     )
 

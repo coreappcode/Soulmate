@@ -1,5 +1,9 @@
 package com.example.ui.screens.profile_setup
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -84,6 +88,26 @@ fun PermissionsScreen(
     val confettiProgress = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
 
+    // Real Android Location Permission Request Launcher
+    val locationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fine = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarse = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        if (fine || coarse) {
+            onAllowLocation()
+        }
+    }
+
+    // Real Android Notifications Permission Request Launcher
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            onAllowNotifications()
+        }
+    }
+
     val particles = remember {
         val colors = listOf(Color(0xFFFF6B9D), Color(0xFFC86DD7), Color(0xFF6E8EFB), Color(0xFF34D399), Color(0xFFFBBF24))
         List(60) {
@@ -134,7 +158,15 @@ fun PermissionsScreen(
                 title = "Location",
                 description = "Required to find people nearby",
                 isAllowed = locationAllowed,
-                onAllow = onAllowLocation,
+                onAllow = {
+                    locationLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                    onAllowLocation()
+                },
                 tag = "allow_location_card"
             )
 
@@ -146,7 +178,12 @@ fun PermissionsScreen(
                 title = "Notifications",
                 description = "Get notified when you match and receive messages",
                 isAllowed = notificationsAllowed,
-                onAllow = onAllowNotifications,
+                onAllow = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    onAllowNotifications()
+                },
                 tag = "allow_notifications_card"
             )
 

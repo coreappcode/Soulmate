@@ -47,6 +47,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.ui.components.GradientButton
@@ -64,15 +70,46 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 
 @Composable
 fun FaceCaptureScreen(
     onFaceCaptured: (String) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     var isCapturing by remember { mutableStateOf(false) }
     var capturedPhotoUrl by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
+
+    // Real Camera Selfie capture launcher
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        isCapturing = false
+        if (bitmap != null) {
+            try {
+                val photoFile = File(context.cacheDir, "selfie_face_${System.currentTimeMillis()}.jpg")
+                FileOutputStream(photoFile).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                }
+                capturedPhotoUrl = photoFile.toURI().toString()
+            } catch (e: Exception) {
+                // Ignore failure
+            }
+        }
+    }
+
+    // Real Photo Picker launcher
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        isCapturing = false
+        if (uri != null) {
+            capturedPhotoUrl = uri.toString()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -214,19 +251,31 @@ fun FaceCaptureScreen(
                 .padding(24.dp)
         ) {
             if (capturedPhotoUrl == null) {
-                GradientButton(
-                    text = "Capture",
-                    onClick = {
-                        isCapturing = true
-                        coroutineScope.launch {
-                            delay(1800)
-                            isCapturing = false
-                            capturedPhotoUrl = "https://picsum.photos/seed/selfie_verified/500/500"
-                        }
-                    },
-                    loading = isCapturing,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GradientButton(
+                        text = "Take Selfie (Camera)",
+                        onClick = {
+                            isCapturing = true
+                            takePictureLauncher.launch(null)
+                        },
+                        loading = isCapturing,
+                        modifier = Modifier.fillMaxWidth().testTag("take_selfie_button")
+                    )
+
+                    SoulOutlinedButton(
+                        text = "Choose from Gallery",
+                        onClick = {
+                            isCapturing = true
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("choose_selfie_gallery_button")
+                    )
+                }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
