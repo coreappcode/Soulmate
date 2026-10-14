@@ -192,7 +192,7 @@ fun ChatThreadScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = TextPrimary
+                            tint = Color.White
                         )
                     }
 
@@ -211,13 +211,13 @@ fun ChatThreadScreen(
                             fontFamily = PoppinsFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.sp,
-                            color = TextPrimary
+                            color = Color.White
                         )
                         Text(
                             text = if (user.isOnline) "Online" else "Active recently",
                             fontFamily = InterFontFamily,
                             fontSize = 11.sp,
-                            color = if (user.isOnline) SemanticOnline else TextSecondary
+                            color = if (user.isOnline) SemanticOnline else Color.White.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -232,7 +232,7 @@ fun ChatThreadScreen(
                         Icon(
                             imageVector = Icons.Default.Videocam,
                             contentDescription = "Video Call",
-                            tint = OrchidPrimary
+                            tint = Color.White
                         )
                     }
 
@@ -243,7 +243,7 @@ fun ChatThreadScreen(
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "Chat Options",
-                            tint = TextPrimary
+                            tint = Color.White
                         )
                     }
                 }

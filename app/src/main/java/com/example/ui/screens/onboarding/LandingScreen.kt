@@ -1,7 +1,9 @@
 package com.example.ui.screens.onboarding
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -51,15 +53,15 @@ fun LandingScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Top 55%: hero image with gradient overlay fading into cream
+            // Top 55%: hero image
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.55f)
             ) {
-                AsyncImage(
-                    model = "https://picsum.photos/seed/soulmate_hero/800/1200",
-                    contentDescription = "Happy people connecting",
+                Image(
+                    painter = painterResource(id = com.example.R.drawable.img_landing_hero),
+                    contentDescription = "Happy couple connecting",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -72,23 +74,6 @@ fun LandingScreen(
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent)
-                            )
-                        )
-                )
-
-                // Bottom gradient fading smoothly into AppBackground cream (#FFF7F2)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    AppBackground.copy(alpha = 0.7f),
-                                    AppBackground
-                                )
                             )
                         )
                 )

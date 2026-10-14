@@ -24,11 +24,12 @@ val AppBackground = Color(0xFFFFF7F2)     // warm cream — never pure white/bla
 val CardBackground = Color(0xFFFFFFFF)    // only cards use pure white
 val ElevatedSurface = Color(0xFFFDF2F8)   // soft blush
 val DarkAccent = Color(0xFF2A1B3D)        // deep plum — used sparingly, never as main bg
-val HeaderBackground = Color(0xFFFBE9F1)  // soft rose blush for top app bar
-val BottomNavBackground = Color(0xFFF3E8FF) // soft lavender for bottom nav
+val TinderPink = Color(0xFFFD3A73)        // Tinder model iconic pink
+val HeaderBackground = TinderPink         // Tinder model pink for top app bar / header
+val BottomNavBackground = TinderPink      // Tinder model pink for bottom nav bar
 val HairlineDivider = Color(0xFFF0E6EC)   // 1dp hairline divider
-val ActiveTabLabel = Color(0xFFC86DD7)    // active tab label orchid
-val InactiveTabColor = Color(0xFFA99BB5)  // inactive tab lavender-gray
+val ActiveTabLabel = Color(0xFFFFFFFF)    // active tab label white on pink
+val InactiveTabColor = Color(0xFFFFD1DC)  // inactive tab soft pink-white on pink
 
 // Text Colors
 val TextPrimary = Color(0xFF1A1423)       // near-black plum, never pure black
@@ -45,9 +46,8 @@ val SemanticLike = Color(0xFFFF6B9D)      // matches gradient start
 val SemanticVerified = Color(0xFF6E8EFB)  // periwinkle
 
 // Borders
-val BorderSubtle = Color(0xFF1A1423)
-val BorderBlack = Color(0xFF000000)
-val BorderFocus = Color(0xFF000000)
+val BorderSubtle = Color(0xFFE8D5E5)
+val BorderFocus = Color(0xFFC86DD7)
 
 // Brand Tinted Shadows (never gray/black)
 val BrandShadowColor = Color(0x1FC86DD7)

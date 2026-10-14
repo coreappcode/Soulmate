@@ -113,7 +113,7 @@ fun MyProfileScreen(
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Settings",
-                        tint = TextPrimary
+                        tint = Color.White
                     )
                 }
             }

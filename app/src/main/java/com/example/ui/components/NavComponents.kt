@@ -72,6 +72,7 @@ import com.example.ui.theme.BrandShadowColor
 import com.example.ui.theme.HairlineDivider
 import com.example.ui.theme.HeaderBackground
 import com.example.ui.theme.InactiveTabColor
+import com.example.ui.theme.TinderPink
 
 fun Modifier.gradientTint(brush: Brush): Modifier = this
     .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
@@ -88,17 +89,19 @@ fun SoulTopBar(
     showBack: Boolean = false,
     onBackClick: () -> Unit = {},
     modifier: Modifier = Modifier,
+    containerColor: Color = HeaderBackground,
+    contentColor: Color = Color.White,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(HeaderBackground)
+            .background(containerColor)
             .statusBarsPadding()
             .height(56.dp)
             .drawBehind {
                 drawLine(
-                    color = HairlineDivider,
+                    color = Color.White.copy(alpha = 0.25f),
                     start = Offset(0f, size.height),
                     end = Offset(size.width, size.height),
                     strokeWidth = 1.dp.toPx()
@@ -107,45 +110,49 @@ fun SoulTopBar(
             .padding(horizontal = 16.dp)
             .testTag("top_bar_${title.lowercase().replace(" ", "_")}")
     ) {
-        Row(
-            modifier = Modifier.matchParentSize(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides contentColor
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.matchParentSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                if (showBack) {
-                    IconButton(
-                        onClick = onBackClick,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .testTag("top_bar_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = TextPrimary
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (showBack) {
+                        IconButton(
+                            onClick = onBackClick,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("top_bar_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = contentColor
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+
+                    if (title.isNotEmpty()) {
+                        Text(
+                            text = title,
+                            fontFamily = PoppinsFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = contentColor
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
                 }
 
-                if (title.isNotEmpty()) {
-                    Text(
-                        text = title,
-                        fontFamily = PoppinsFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        color = TextPrimary
-                    )
-                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = actions
+                )
             }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                content = actions
-            )
         }
     }
 }
@@ -203,14 +210,14 @@ fun SoulBottomNav(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 12.dp,
-                ambientColor = BrandShadowSoft,
+                elevation = 8.dp,
+                ambientColor = BrandShadowColor,
                 spotColor = BrandShadowColor
             )
             .background(BottomNavBackground)
             .drawBehind {
                 drawLine(
-                    color = HairlineDivider,
+                    color = Color.White.copy(alpha = 0.25f),
                     start = Offset(0f, 0f),
                     end = Offset(size.width, 0f),
                     strokeWidth = 1.dp.toPx()
@@ -242,13 +249,14 @@ fun SoulBottomNav(
                         badge = {
                             if (item.badgeCount != null) {
                                 Badge(
-                                    containerColor = SemanticError,
-                                    contentColor = Color.White
+                                    containerColor = Color.White,
+                                    contentColor = TinderPink
                                 ) {
                                     Text(
                                         text = item.badgeCount,
                                         fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        color = TinderPink
                                     )
                                 }
                             }
@@ -259,15 +267,13 @@ fun SoulBottomNav(
                                 imageVector = item.selectedIcon,
                                 contentDescription = item.label,
                                 tint = Color.White,
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .gradientTint(AuroraHorizontalGradient)
+                                modifier = Modifier.size(24.dp)
                             )
                         } else {
                             Icon(
                                 imageVector = item.unselectedIcon,
                                 contentDescription = item.label,
-                                tint = InactiveTabColor,
+                                tint = Color.White.copy(alpha = 0.65f),
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -278,9 +284,9 @@ fun SoulBottomNav(
                     Text(
                         text = item.label,
                         fontFamily = PoppinsFontFamily,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         fontSize = 11.sp,
-                        color = if (isSelected) ActiveTabLabel else InactiveTabColor
+                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.70f)
                     )
                 }
             }

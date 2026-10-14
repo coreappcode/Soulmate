@@ -113,7 +113,7 @@ fun ChatListScreen(
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "New Chat",
-                        tint = OrchidPrimary
+                        tint = Color.White
                     )
                 }
             }

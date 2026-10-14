@@ -124,7 +124,7 @@ fun FriendsScreen(
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Search",
-                        tint = TextPrimary
+                        tint = Color.White
                     )
                 }
 
@@ -137,7 +137,7 @@ fun FriendsScreen(
                     Icon(
                         imageVector = Icons.Default.PersonAdd,
                         contentDescription = "Find Friends",
-                        tint = OrchidPrimary
+                        tint = Color.White
                     )
                 }
             }
