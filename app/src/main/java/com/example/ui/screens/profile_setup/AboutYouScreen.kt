@@ -310,9 +310,9 @@ fun AboutYouScreen(
         ) {
             if (!canContinue) {
                 val missing = mutableListOf<String>().apply {
-                    if (!isBioValid) add("Bio (min 10 chars)")
-                    if (!isInterestsValid) add("Select at least 1 Interest")
-                    if (!isLookingForValid) add("Select who you are looking for")
+                    if (!isBioValid) add("Bio *")
+                    if (!isInterestsValid) add("Interests *")
+                    if (!isLookingForValid) add("Looking For *")
                 }.joinToString(" • ")
 
                 Text(

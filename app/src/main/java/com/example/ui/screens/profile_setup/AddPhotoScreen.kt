@@ -110,7 +110,7 @@ fun AddPhotoScreen(
             // Card 1: Choose from Gallery (Android Photo Picker)
             PhotoSourceCard(
                 title = "Choose from Gallery",
-                subtitle = "Pick real photos using Android Photo Picker",
+                subtitle = "Pick photos from your device gallery",
                 icon = Icons.Default.PhotoLibrary,
                 onClick = {
                     photoPickerLauncher.launch(
