@@ -5,6 +5,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -59,6 +60,7 @@ import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.screens.settings.TermsScreen
 import com.example.ui.screens.settings.VerificationStatusScreen
 import com.example.ui.theme.AppBackground
+import com.example.ui.theme.HeaderBackground
 
 sealed interface ActiveSubScreen {
     data object None : ActiveSubScreen
@@ -147,7 +149,8 @@ fun DashboardScreen(
                 )
             }
         },
-        containerColor = AppBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = HeaderBackground,
         modifier = Modifier
             .fillMaxSize()
             .testTag("dashboard_screen")
@@ -156,7 +159,7 @@ fun DashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(AppBackground)
-                .padding(innerPadding)
+                .padding(bottom = innerPadding.calculateBottomPadding())
         ) {
             when (val sub = activeSubScreen) {
                 // EXPLORE SUB-SCREENS
