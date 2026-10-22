@@ -99,7 +99,7 @@ fun AccountSettingsScreen(
                     AccountOptionRow(
                         icon = Icons.Default.Phone,
                         title = "Phone Number",
-                        value = "${userProfile.selectedCountry.dialCode} ${userProfile.phoneNumber}",
+                        value = userProfile.formattedPhoneNumber,
                         onClick = onChangePhone
                     )
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))

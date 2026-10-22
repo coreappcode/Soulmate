@@ -6,8 +6,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -30,6 +32,7 @@ import com.example.ui.screens.profile_setup.UsernameScreen
 import com.example.ui.screens.profile_setup.VerificationProcessingScreen
 import com.example.ui.screens.profile_setup.VerificationSuccessScreen
 import com.example.ui.screens.splash.SplashScreen
+import com.example.utils.findActivity
 
 @Composable
 fun SoulmateNavGraph(
@@ -37,6 +40,30 @@ fun SoulmateNavGraph(
     viewModel: SoulmateViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val phoneAuthState by viewModel.phoneAuthState.collectAsState()
+    val activity = LocalContext.current.findActivity()
+
+    LaunchedEffect(phoneAuthState.codeSentVersion) {
+        if (
+            phoneAuthState.codeSentVersion > 0 &&
+            navController.currentDestination?.route == Routes.PHONE_ENTRY
+        ) {
+            navController.navigate(Routes.OTP_VERIFY)
+        }
+    }
+
+    LaunchedEffect(uiState.isPhoneVerified) {
+        val currentRoute = navController.currentDestination?.route
+        if (
+            uiState.isPhoneVerified &&
+            (currentRoute == Routes.PHONE_ENTRY || currentRoute == Routes.OTP_VERIFY)
+        ) {
+            navController.navigate(Routes.BASIC_INFO) {
+                popUpTo(Routes.LANDING) { inclusive = true }
+            }
+        }
+
+    }
 
     NavHost(
         navController = navController,
@@ -70,7 +97,9 @@ fun SoulmateNavGraph(
         composable(Routes.SPLASH) {
             SplashScreen(
                 onTimeout = {
-                    navController.navigate(Routes.LANDING) {
+                    val destination =
+                        if (uiState.isPhoneVerified) Routes.DASHBOARD else Routes.LANDING
+                    navController.navigate(destination) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 }
@@ -105,9 +134,19 @@ fun SoulmateNavGraph(
             PhoneEntryScreen(
                 country = uiState.selectedCountry,
                 phoneNumber = uiState.phoneNumber,
+                isLoading = phoneAuthState.isSendingCode,
+                errorMessage = phoneAuthState.errorMessage,
                 onPhoneNumberChange = { viewModel.updatePhoneNumber(it) },
                 onCountryTap = { navController.navigate(Routes.COUNTRY_PICKER) },
-                onSendCode = { navController.navigate(Routes.OTP_VERIFY) },
+                onSendCode = {
+                    val fullPhoneNumber =
+                        uiState.selectedCountry.dialCode + uiState.phoneNumber.filter(Char::isDigit)
+                    if (activity != null) {
+                        viewModel.sendPhoneVerificationCode(activity, fullPhoneNumber)
+                    } else {
+                        viewModel.setPhoneAuthError("Unable to start phone verification right now.")
+                    }
+                },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -118,13 +157,33 @@ fun SoulmateNavGraph(
                 countryDialCode = uiState.selectedCountry.dialCode,
                 phoneNumber = uiState.phoneNumber,
                 otp = uiState.otpCode,
+                isVerifying = phoneAuthState.isVerifying,
+                isSendingCode = phoneAuthState.isSendingCode,
+                errorMessage = phoneAuthState.errorMessage,
+                codeSentVersion = phoneAuthState.codeSentVersion,
                 onOtpChange = { viewModel.updateOtp(it) },
-                onVerifySuccess = {
-                    viewModel.setPhoneVerified(true)
-                    navController.navigate(Routes.BASIC_INFO)
+                onVerify = { viewModel.verifyPhoneCode(it) },
+                onResendCode = {
+                    val fullPhoneNumber =
+                        uiState.selectedCountry.dialCode + uiState.phoneNumber.filter(Char::isDigit)
+                    if (activity != null) {
+                        viewModel.sendPhoneVerificationCode(
+                            activity,
+                            fullPhoneNumber,
+                            forceResending = true
+                        )
+                    } else {
+                        viewModel.setPhoneAuthError("Unable to resend the verification code right now.")
+                    }
                 },
-                onChangeNumber = { navController.popBackStack() },
-                onBack = { navController.popBackStack() }
+                onChangeNumber = {
+                    viewModel.resetPhoneAuth()
+                    navController.popBackStack()
+                },
+                onBack = {
+                    viewModel.resetPhoneAuth()
+                    navController.popBackStack()
+                }
             )
         }
 
@@ -270,6 +329,7 @@ fun SoulmateNavGraph(
                     navController.navigate(Routes.COUNTRY_PICKER)
                 },
                 onLogout = {
+                    viewModel.signOut()
                     navController.navigate(Routes.LANDING) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -292,6 +352,7 @@ fun SoulmateNavGraph(
                     navController.navigate(Routes.COUNTRY_PICKER)
                 },
                 onLogout = {
+                    viewModel.signOut()
                     navController.navigate(Routes.LANDING) {
                         popUpTo(0) { inclusive = true }
                     }

@@ -1,6 +1,12 @@
 package com.example.ui
 
+import android.app.Activity
 import androidx.lifecycle.ViewModel
+import com.google.firebase.FirebaseException
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
 import com.example.data.ChatConversation
 import com.example.data.ChatMessage
 import com.example.data.Country
@@ -14,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 data class ExploreFilterState(
@@ -51,9 +58,42 @@ data class NotificationSettingsState(
 
 class SoulmateViewModel : ViewModel() {
 
+    data class PhoneAuthUiState(
+        val isSendingCode: Boolean = false,
+        val isVerifying: Boolean = false,
+        val isPhoneUpdate: Boolean = false,
+        val isPhoneUpdateComplete: Boolean = false,
+        val errorMessage: String? = null,
+        val codeSentVersion: Int = 0
+    )
+
+    private val firebaseAuth = FirebaseAuth.getInstance()
+    private var verificationId: String? = null
+    private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
+    private val _phoneAuthState = MutableStateFlow(PhoneAuthUiState())
+    val phoneAuthState: StateFlow<PhoneAuthUiState> = _phoneAuthState.asStateFlow()
+    private var pendingPhoneNumberForProfile: String? = null
+
     // User Profile State
     private val _uiState = MutableStateFlow(UserProfileState())
     val uiState: StateFlow<UserProfileState> = _uiState.asStateFlow()
+
+    init {
+        firebaseAuth.currentUser?.phoneNumber?.let { phoneNumber ->
+            val matchedCountry = MockData.allCountries
+                .filter { phoneNumber.startsWith(it.dialCode) }
+                .maxByOrNull { it.dialCode.length }
+            _uiState.update {
+                it.copy(
+                    isPhoneVerified = true,
+                    selectedCountry = matchedCountry ?: it.selectedCountry,
+                    phoneNumber = matchedCountry
+                        ?.let { country -> phoneNumber.removePrefix(country.dialCode).filter(Char::isDigit) }
+                        ?: phoneNumber
+                )
+            }
+        }
+    }
 
     // Explore Deck State
     private val _exploreDeck = MutableStateFlow(MockData.users)
@@ -122,10 +162,204 @@ class SoulmateViewModel : ViewModel() {
 
     fun updateOtp(otp: String) {
         _uiState.update { it.copy(otpCode = otp) }
+        _phoneAuthState.update { it.copy(errorMessage = null) }
     }
 
-    fun setPhoneVerified(verified: Boolean) {
-        _uiState.update { it.copy(isPhoneVerified = verified) }
+    fun setPhoneAuthError(message: String) {
+        _phoneAuthState.update {
+            it.copy(isSendingCode = false, errorMessage = message)
+        }
+    }
+
+    fun resetPhoneAuth() {
+        verificationId = null
+        resendToken = null
+        pendingPhoneNumberForProfile = null
+        _uiState.update { it.copy(otpCode = "") }
+        _phoneAuthState.value = PhoneAuthUiState()
+    }
+
+    fun signOut() {
+        firebaseAuth.signOut()
+        resetPhoneAuth()
+        _uiState.update { it.copy(isPhoneVerified = false, phoneNumber = "") }
+    }
+
+    fun sendPhoneVerificationCode(
+        activity: Activity,
+        phoneNumber: String,
+        forceResending: Boolean = false,
+        updateExistingPhone: Boolean = false,
+        phoneNumberForProfile: String? = null
+    ) {
+        if (!phoneNumber.matches(Regex("^\\+[1-9]\\d{7,14}$"))) {
+            setPhoneAuthError("Enter a valid phone number with country code.")
+            return
+        }
+
+        if (updateExistingPhone && firebaseAuth.currentUser == null) {
+            setPhoneAuthError("Sign in again before updating your phone number.")
+            return
+        }
+
+        pendingPhoneNumberForProfile = phoneNumberForProfile
+        if (forceResending) {
+            _phoneAuthState.update {
+                it.copy(isSendingCode = true, errorMessage = null)
+            }
+        } else {
+            verificationId = null
+            resendToken = null
+            _uiState.update { it.copy(otpCode = "") }
+            _phoneAuthState.value = PhoneAuthUiState(
+                isSendingCode = true,
+                isPhoneUpdate = updateExistingPhone
+            )
+        }
+
+        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                completePhoneCredential(credential, updateExistingPhone)
+            }
+
+            override fun onVerificationFailed(exception: FirebaseException) {
+                _phoneAuthState.update {
+                    it.copy(
+                        isSendingCode = false,
+                        isVerifying = false,
+                        errorMessage = exception.localizedMessage
+                            ?: "Unable to send a verification code. Please try again."
+                    )
+                }
+            }
+
+            override fun onCodeSent(
+                newVerificationId: String,
+                token: PhoneAuthProvider.ForceResendingToken
+            ) {
+                verificationId = newVerificationId
+                resendToken = token
+                _uiState.update { it.copy(otpCode = "") }
+                _phoneAuthState.update {
+                    it.copy(
+                        isSendingCode = false,
+                        errorMessage = null,
+                        isPhoneUpdate = updateExistingPhone,
+                        codeSentVersion = it.codeSentVersion + 1
+                    )
+                }
+            }
+        }
+
+        val optionsBuilder = PhoneAuthOptions.newBuilder(firebaseAuth)
+            .setPhoneNumber(phoneNumber)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+
+        if (forceResending) {
+            resendToken?.let(optionsBuilder::setForceResendingToken)
+        }
+
+        PhoneAuthProvider.verifyPhoneNumber(optionsBuilder.build())
+    }
+
+    fun verifyPhoneCode(code: String) {
+        if (_phoneAuthState.value.isVerifying) return
+
+        val currentVerificationId = verificationId
+        if (currentVerificationId.isNullOrBlank()) {
+            _phoneAuthState.update {
+                it.copy(errorMessage = "Request a verification code before continuing.")
+            }
+            return
+        }
+
+        if (code.length != 6 || !code.all(Char::isDigit)) {
+            _phoneAuthState.update {
+                it.copy(errorMessage = "Enter the 6-digit code sent to your phone.")
+            }
+            return
+        }
+
+        _phoneAuthState.update {
+            it.copy(isVerifying = true, errorMessage = null)
+        }
+        val credential = PhoneAuthProvider.getCredential(currentVerificationId, code)
+        completePhoneCredential(credential, _phoneAuthState.value.isPhoneUpdate)
+    }
+
+    private fun completePhoneCredential(
+        credential: PhoneAuthCredential,
+        updateExistingPhone: Boolean
+    ) {
+        _phoneAuthState.update {
+            it.copy(isVerifying = true, errorMessage = null)
+        }
+        if (updateExistingPhone) {
+            val currentUser = firebaseAuth.currentUser
+            if (currentUser == null) {
+                _phoneAuthState.update {
+                    it.copy(
+                        isVerifying = false,
+                        errorMessage = "Sign in again before updating your phone number."
+                    )
+                }
+                return
+            }
+            currentUser.updatePhoneNumber(credential).addOnCompleteListener { task ->
+                onPhoneCredentialResult(
+                    task.isSuccessful,
+                    task.exception,
+                    updateExistingPhone = true
+                )
+            }
+        } else {
+            firebaseAuth.signInWithCredential(credential).addOnCompleteListener { task ->
+                onPhoneCredentialResult(
+                    task.isSuccessful,
+                    task.exception,
+                    updateExistingPhone = false
+                )
+            }
+        }
+    }
+
+    private fun onPhoneCredentialResult(
+        isSuccessful: Boolean,
+        exception: Exception?,
+        updateExistingPhone: Boolean
+    ) {
+        if (isSuccessful) {
+            _uiState.update {
+                it.copy(
+                    isPhoneVerified = true,
+                    phoneNumber = if (updateExistingPhone) {
+                        pendingPhoneNumberForProfile ?: it.phoneNumber
+                    } else {
+                        it.phoneNumber
+                    }
+                )
+            }
+            _phoneAuthState.update {
+                it.copy(
+                    isSendingCode = false,
+                    isVerifying = false,
+                    isPhoneUpdateComplete = updateExistingPhone,
+                    errorMessage = null
+                )
+            }
+            pendingPhoneNumberForProfile = null
+        } else {
+            _phoneAuthState.update {
+                it.copy(
+                    isSendingCode = false,
+                    isVerifying = false,
+                    errorMessage = exception?.localizedMessage
+                        ?: "The verification code was rejected. Check it and try again."
+                )
+            }
+        }
     }
 
     fun updateFullName(name: String) {

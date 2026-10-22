@@ -120,11 +120,11 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 #### 3. Phone Entry Screen
 - **Route:** `phone_entry` (`Routes.PHONE_ENTRY`)
 - **File:** `ui/screens/auth/PhoneEntryScreen.kt`
-- **Description:** International phone number input with Country Code selector trigger button, validation for digit count, and privacy disclaimer.
+- **Description:** International phone number input with country-code selection and Firebase Phone Auth SMS verification.
 - **Navigations:**
   - Back Button → returns to `Routes.LANDING`.
   - Country Code selector tap → navigates to `Routes.COUNTRY_PICKER`.
-  - "Send Code" → saves phone in `SoulmateViewModel` and navigates to `Routes.OTP_VERIFY`.
+  - "Send Code" → requests a Firebase verification SMS and opens `Routes.OTP_VERIFY` only after Firebase sends the code.
 - **Buttons:** Country selector pill, `GradientButton` ("Send Code").
 - **Icons:** `Icons.AutoMirrored.Filled.ArrowBack`, `Icons.Default.Phone`.
 
@@ -141,10 +141,10 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 #### 5. OTP Verification Screen
 - **Route:** `otp_verify` (`Routes.OTP_VERIFY`)
 - **File:** `ui/screens/auth/OtpVerifyScreen.kt`
-- **Description:** 6-digit PIN input with countdown timer (30s), resend code trigger, animated checkmark transition on verification, and dedicated Verify button.
+- **Description:** Firebase-backed 6-digit SMS code entry with resend countdown, verification errors, and a dedicated Verify button.
 - **Navigations:**
   - Back Button → returns to `Routes.PHONE_ENTRY`.
-  - "Verify" button (or automatic 6-digit completion) → sets `phoneVerified = true` in ViewModel and navigates to `Routes.BASIC_INFO`.
+  - "Verify" button (or automatic 6-digit completion) → signs in with the Firebase phone credential and navigates to `Routes.BASIC_INFO` only after successful verification.
   - "Change phone number" → returns to `Routes.PHONE_ENTRY`.
 - **Buttons:** `GradientButton` ("Verify"), TextButton ("Resend in 0:XXs").
 - **Icons:** `Icons.AutoMirrored.Filled.ArrowBack`, `Icons.Default.Lock`, `Icons.Default.Check`.
@@ -814,11 +814,13 @@ The app is built as a complete, fully functional self-contained client. Below is
 | **Media Picking & Camera** | All photo screens | **100% Real Android SDK** (`PickVisualMedia` + `TakePicturePreview`). | None required (uses native OS). |
 | **OS System Permissions** | `PermissionsScreen.kt` | **100% Real Android SDK** (`RequestMultiplePermissions`). | None required (uses native OS). |
 | **Date Selection** | `BasicInfoScreen.kt` | **100% Real Android SDK** (`DatePickerDialog`). | None required (uses native OS). |
-| **SMS OTP Verification** | `PhoneEntryScreen.kt`, `OtpVerifyScreen.kt` | Accepts valid 6-digit PIN input with 30s countdown timer and resend trigger. | External paid SMS gateway (e.g. Twilio or Firebase Phone Auth) to deliver physical cellular SMS messages. |
+| **SMS OTP Verification** | `PhoneEntryScreen.kt`, `OtpVerifyScreen.kt`, `PhoneNumberScreen.kt` | Firebase Phone Auth sends/resends the SMS, signs the user in with the verified credential, and updates an existing account phone only after OTP verification. | Enable Phone sign-in in Firebase Authentication; register the app's SHA-1/SHA-256 fingerprints in Firebase for app verification. Firebase test phone numbers can be used during development. |
 | **Verification Analysis Pipeline** | `VerificationProcessingScreen.kt` | 3-step automated biometric analysis animation (Face Detected, Liveness Confirmed, Profile Match) that transitions to verified state. | Cloud server biometrics endpoint or on-device ML Kit Face Mesh detection. |
 | **Peer-to-Peer Chat Sync** | `ChatThreadScreen.kt` | Real-time interactive message sending, typing status, and photo attachments stored in ViewModel reactive state. | Cloud WebSocket server or Firebase Firestore for remote two-way peer synchronization. |
 | **Matchmaking Swipe Deck** | `ExploreScreen.kt` | Interactive swipe physics with swipe-left (pass), swipe-right (like), superlike, filter controls, and match celebration. | Remote database (Firebase Firestore / Cloud SQL) with geospatial coordinates. |
 | **In-App Billing** | `ProPlansScreen.kt` | Interactive plan selector (1 Month / 6 Months / 12 Months) updating user's Gold tier status immediately in state. | Google Play Billing Library (`com.android.billingclient:billing`) and Google Play Console merchant account. |
+
+Before testing SMS sign-in, enable **Phone** under Firebase Console → Authentication → Sign-in method, and add the app's SHA-1 and SHA-256 signing-certificate fingerprints to the Android app registration. The Android Firebase config must be available as `app/google-services.json`. Use Firebase Authentication test phone numbers during development to avoid sending real SMS messages.
 
 ---
 

@@ -252,7 +252,7 @@ fun PhoneInput(
                 },
                 placeholder = {
                     Text(
-                        text = "98765 43210",
+                        text = "Phone number",
                         fontFamily = InterFontFamily,
                         color = TextMuted,
                         fontSize = 15.sp

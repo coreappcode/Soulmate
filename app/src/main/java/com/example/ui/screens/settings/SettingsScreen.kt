@@ -189,7 +189,7 @@ fun SettingsScreen(
                     SettingsDivider()
                     SettingsRow(icon = Icons.Default.VerifiedUser, title = "Verification Status", onClick = onNavigateToVerificationStatus)
                     SettingsDivider()
-                    SettingsRow(icon = Icons.Default.Phone, title = "Phone Number", subtitle = userProfile.selectedCountry.dialCode + " " + userProfile.phoneNumber, onClick = onNavigateToPhoneNumber)
+                    SettingsRow(icon = Icons.Default.Phone, title = "Phone Number", subtitle = userProfile.formattedPhoneNumber, onClick = onNavigateToPhoneNumber)
                 }
             }
 

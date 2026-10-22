@@ -19,15 +19,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.data.Country
 import com.example.ui.components.GradientButton
 import com.example.ui.components.PhoneInput
@@ -35,27 +30,24 @@ import com.example.ui.components.ProgressDots
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.BodyStyle
 import com.example.ui.theme.H2Style
+import com.example.ui.theme.SemanticError
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.utils.Validators
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @Composable
 fun PhoneEntryScreen(
     country: Country,
     phoneNumber: String,
+    isLoading: Boolean,
+    errorMessage: String?,
     onPhoneNumberChange: (String) -> Unit,
     onCountryTap: () -> Unit,
     onSendCode: () -> Unit,
     onBack: () -> Unit
 ) {
-    var isLoading by remember { mutableStateOf(false) }
-    var hasTyped by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
-
     val isValid = Validators.isValidPhoneNumber(phoneNumber)
-    val showError = hasTyped && !isValid && phoneNumber.isNotEmpty()
+    val showError = !isValid && phoneNumber.isNotEmpty()
 
     Column(
         modifier = Modifier
@@ -114,29 +106,25 @@ fun PhoneEntryScreen(
             countryFlag = country.flag,
             phoneNumber = phoneNumber,
             onCountryTap = onCountryTap,
-            onNumberChange = {
-                hasTyped = true
-                onPhoneNumberChange(it)
-            },
+            onNumberChange = onPhoneNumberChange,
             isError = showError,
             supportingText = if (showError) "Please enter at least 10 digits" else null
         )
+
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage,
+                style = BodyStyle.copy(color = SemanticError),
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         GradientButton(
             text = "Send Code",
-            onClick = {
-                if (isValid && !isLoading) {
-                    isLoading = true
-                    coroutineScope.launch {
-                        delay(1500)
-                        isLoading = false
-                        onSendCode()
-                    }
-                }
-            },
-            enabled = isValid,
+            onClick = onSendCode,
+            enabled = isValid && !isLoading,
             loading = isLoading,
             modifier = Modifier.fillMaxWidth()
         )

@@ -30,9 +30,9 @@ data class Country(
 
 data class UserProfileState(
     val selectedCountry: Country = Country("India", "🇮🇳", "+91"),
-    val phoneNumber: String = "9876543210",
+    val phoneNumber: String = "",
     val otpCode: String = "",
-    val isPhoneVerified: Boolean = true,
+    val isPhoneVerified: Boolean = false,
     val fullName: String = "Anya Sharma",
     val dateOfBirth: String = "14/08/1999",
     val age: Int = 25,
@@ -57,6 +57,13 @@ data class UserProfileState(
     val locationPermissionGranted: Boolean = true,
     val notificationsPermissionGranted: Boolean = true
 ) {
+    val formattedPhoneNumber: String
+        get() = if (phoneNumber.startsWith("+")) {
+            phoneNumber
+        } else {
+            "${selectedCountry.dialCode} $phoneNumber"
+        }
+
     val profileStrength: Float
         get() {
             var filled = 0f

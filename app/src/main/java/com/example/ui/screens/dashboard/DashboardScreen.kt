@@ -1,5 +1,6 @@
 package com.example.ui.screens.dashboard
 
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -61,6 +62,7 @@ import com.example.ui.screens.settings.TermsScreen
 import com.example.ui.screens.settings.VerificationStatusScreen
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.HeaderBackground
+import com.example.utils.findActivity
 
 sealed interface ActiveSubScreen {
     data object None : ActiveSubScreen
@@ -130,6 +132,8 @@ fun DashboardScreen(
     val matchmakingSettings by viewModel.matchmaking.collectAsState()
     val privacySettings by viewModel.privacySettings.collectAsState()
     val notificationSettings by viewModel.notificationSettings.collectAsState()
+    val phoneAuthState by viewModel.phoneAuthState.collectAsState()
+    val phoneAuthActivity = LocalContext.current.findActivity()
 
     // Handle back button for any active sub-screen
     BackHandler(enabled = activeSubScreen !is ActiveSubScreen.None) {
@@ -438,12 +442,60 @@ fun DashboardScreen(
                     PhoneNumberScreen(
                         currentCountry = userProfile.selectedCountry,
                         currentPhone = userProfile.phoneNumber,
-                        onSave = { newPhone ->
-                            viewModel.updatePhoneNumber(newPhone)
+                        otp = userProfile.otpCode,
+                        isSendingCode = phoneAuthState.isSendingCode,
+                        isVerifying = phoneAuthState.isVerifying,
+                        isPhoneUpdate = phoneAuthState.isPhoneUpdate,
+                        isPhoneUpdateComplete = phoneAuthState.isPhoneUpdateComplete,
+                        codeSentVersion = phoneAuthState.codeSentVersion,
+                        errorMessage = phoneAuthState.errorMessage,
+                        onOtpChange = { viewModel.updateOtp(it) },
+                        onRequestCode = { newPhone ->
+                            val fullPhoneNumber =
+                                userProfile.selectedCountry.dialCode +
+                                    newPhone.filter(Char::isDigit)
+                            if (phoneAuthActivity != null) {
+                                viewModel.sendPhoneVerificationCode(
+                                    phoneAuthActivity,
+                                    fullPhoneNumber,
+                                    updateExistingPhone = true,
+                                    phoneNumberForProfile = newPhone
+                                )
+                            } else {
+                                viewModel.setPhoneAuthError(
+                                    "Unable to start phone verification right now."
+                                )
+                            }
+                        },
+                        onVerifyCode = { viewModel.verifyPhoneCode(it) },
+                        onResendCode = { newPhone ->
+                            val fullPhoneNumber =
+                                userProfile.selectedCountry.dialCode +
+                                    newPhone.filter(Char::isDigit)
+                            if (phoneAuthActivity != null) {
+                                viewModel.sendPhoneVerificationCode(
+                                    phoneAuthActivity,
+                                    fullPhoneNumber,
+                                    forceResending = true,
+                                    updateExistingPhone = true,
+                                    phoneNumberForProfile = newPhone
+                                )
+                            } else {
+                                viewModel.setPhoneAuthError(
+                                    "Unable to resend the verification code right now."
+                                )
+                            }
+                        },
+                        onChangeNumber = { viewModel.resetPhoneAuth() },
+                        onPhoneUpdated = {
+                            viewModel.resetPhoneAuth()
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onOpenCountryPicker = onNavigateToCountryPicker,
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = {
+                            viewModel.resetPhoneAuth()
+                            activeSubScreen = ActiveSubScreen.None
+                        }
                     )
                 }
 
