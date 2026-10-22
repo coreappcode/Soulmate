@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,14 +32,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import com.example.R
 import com.example.ui.theme.AuroraGradient
 import com.example.ui.theme.InterFontFamily
 import com.example.ui.theme.PoppinsFontFamily
-import com.example.utils.Constants
 import kotlinx.coroutines.delay
 
 @Composable
@@ -75,13 +76,12 @@ fun SplashScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            AsyncImage(
-                model = Constants.LOGO_URL,
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_logo),
                 contentDescription = "Soulmate Logo",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .size(110.dp)
-                    .scale(scaleAnim.value)
                     .alpha(alphaAnim.value)
                     .testTag("splash_logo")
             )
