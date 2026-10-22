@@ -22,8 +22,8 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="com.soulmate.android" />
-                  <option name="mobileSdkAppId" value="1:50566410751:android:70aeca337118d6b633f7ca" />
+                  <option name="appId" value="com.soulmate.androidapp" />
+                  <option name="mobileSdkAppId" value="1:50566410751:android:9b823badca2d564f33f7ca" />
                   <option name="projectId" value="soulmate-e285e" />
                   <option name="projectNumber" value="50566410751" />
                 </ConnectionSetting>
