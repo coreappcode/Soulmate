@@ -225,6 +225,12 @@ fun MatchmakingScreen(
                     inactiveTrackColor = ElevatedSurface
                 )
             )
+            Text(
+                text = "Distance is saved as a preference. Exact distance matching is unavailable because profiles do not currently store location coordinates.",
+                fontFamily = InterFontFamily,
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 

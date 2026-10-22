@@ -1,6 +1,5 @@
 package com.example.ui.screens.friends
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,7 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.MockData
 import com.example.data.User
 import com.example.ui.components.SoulAvatar
 import com.example.ui.components.SoulSearchBar
@@ -52,14 +50,13 @@ import com.example.ui.theme.TextSecondary
 
 @Composable
 fun FindFriendsScreen(
-    candidates: List<User> = MockData.users.drop(6),
+    candidates: List<User> = emptyList(),
+    sentRequestIds: Set<String> = emptySet(),
     onConnect: (User) -> Unit,
     onOpenProfile: (User) -> Unit,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
-    var connectedUsers by remember { mutableStateOf(setOf<String>()) }
 
     val filtered = candidates.filter {
         it.name.contains(searchQuery, ignoreCase = true) ||
@@ -104,7 +101,7 @@ fun FindFriendsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(filtered, key = { it.id }) { user ->
-                        val isConnected = connectedUsers.contains(user.id)
+                        val isConnected = user.id in sentRequestIds
                         Card(
                             shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -130,7 +127,7 @@ fun FindFriendsScreen(
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "${user.name}, ${user.age}",
+                                            text = user.nameWithAge,
                                             fontFamily = PoppinsFontFamily,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 15.sp,
@@ -156,9 +153,7 @@ fun FindFriendsScreen(
                                                     Modifier
                                                         .background(AuroraHorizontalGradient)
                                                         .clickable {
-                                                            connectedUsers = connectedUsers + user.id
                                                             onConnect(user)
-                                                            Toast.makeText(context, "Request sent to ${user.name}!", Toast.LENGTH_SHORT).show()
                                                         }
                                                         .padding(horizontal = 16.dp, vertical = 8.dp)
                                                 }

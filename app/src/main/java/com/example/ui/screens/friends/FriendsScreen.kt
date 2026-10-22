@@ -301,7 +301,7 @@ private fun FriendRow(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "${user.name}, ${user.age}",
+                    text = user.nameWithAge,
                     fontFamily = PoppinsFontFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,

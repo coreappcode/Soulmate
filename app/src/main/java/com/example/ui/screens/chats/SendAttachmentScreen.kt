@@ -58,13 +58,16 @@ import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.RosePrimary
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.utils.createCameraCaptureUri
 
 @Composable
 fun SendAttachmentScreen(
-    onSendImage: (imageUrl: String, caption: String) -> Unit,
+    onSendAttachment: (uri: Uri, caption: String, mimeType: String) -> Unit,
     onBack: () -> Unit
 ) {
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedMimeType by remember { mutableStateOf<String?>(null) }
+    var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
     var captionText by remember { mutableStateOf("") }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -74,23 +77,42 @@ fun SendAttachmentScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             selectedImageUri = uri
+            selectedMimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
         }
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap: android.graphics.Bitmap? ->
-        if (bitmap != null) {
-            try {
-                val photoFile = java.io.File(context.cacheDir, "chat_snap_${System.currentTimeMillis()}.jpg")
-                java.io.FileOutputStream(photoFile).use { out ->
-                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)
-                }
-                selectedImageUri = Uri.fromFile(photoFile)
-            } catch (e: Exception) {
-                // Ignore
-            }
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uri = cameraCaptureUri
+        if (success && uri != null) {
+            selectedImageUri = uri
+            selectedMimeType = "image/jpeg"
         }
+    }
+
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedImageUri = uri
+            selectedMimeType = context.contentResolver.getType(uri) ?: "audio/*"
+        }
+    }
+
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedImageUri = uri
+            selectedMimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+        }
+    }
+
+    fun sendSelectedAttachment() {
+        val uri = selectedImageUri ?: return
+        val mimeType = selectedMimeType ?: return
+        onSendAttachment(uri, captionText, mimeType)
     }
 
     Column(
@@ -113,7 +135,6 @@ fun SendAttachmentScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (selectedImageUri != null) {
-                // Image preview with caption
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -122,12 +143,38 @@ fun SendAttachmentScreen(
                         .aspectRatio(3f / 3.5f)
                         .border(2.dp, Color(0xFF000000), RoundedCornerShape(20.dp))
                 ) {
-                    AsyncImage(
-                        model = selectedImageUri,
-                        contentDescription = "Selected Photo",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    if (selectedMimeType?.startsWith("image/") == true) {
+                        AsyncImage(
+                            model = selectedImageUri,
+                            contentDescription = "Selected Photo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = if (selectedMimeType?.startsWith("audio/") == true) {
+                                    Icons.Default.Headphones
+                                } else {
+                                    Icons.Default.Description
+                                },
+                                contentDescription = null,
+                                tint = OrchidPrimary,
+                                modifier = Modifier.size(56.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = selectedMimeType.orEmpty(),
+                                fontFamily = InterFontFamily,
+                                fontSize = 13.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -175,7 +222,9 @@ fun SendAttachmentScreen(
                         title = "Take Instant Photo",
                         description = "Capture an authentic live moment",
                         onClick = {
-                            takePictureLauncher.launch(null)
+                            val uri = context.createCameraCaptureUri("chat_attachment")
+                            cameraCaptureUri = uri
+                            takePictureLauncher.launch(uri)
                         }
                     )
 
@@ -184,7 +233,7 @@ fun SendAttachmentScreen(
                         title = "Audio Note",
                         description = "Share a music snippet or voice track",
                         onClick = {
-                            onSendImage("https://picsum.photos/seed/voice1/600/600", "Audio clip shared")
+                            audioPickerLauncher.launch("audio/*")
                         }
                     )
 
@@ -193,7 +242,9 @@ fun SendAttachmentScreen(
                         title = "Document",
                         description = "Share PDF or event tickets",
                         onClick = {
-                            onSendImage("https://picsum.photos/seed/doc1/600/600", "Ticket confirmation")
+                            documentPickerLauncher.launch(
+                                arrayOf("application/pdf", "text/plain", "application/msword")
+                            )
                         }
                     )
                 }
@@ -209,10 +260,12 @@ fun SendAttachmentScreen(
                     .padding(horizontal = 20.dp, vertical = 14.dp)
             ) {
                 GradientButton(
-                    text = "Send Photo",
-                    onClick = {
-                        onSendImage(selectedImageUri.toString(), captionText)
+                    text = when {
+                        selectedMimeType?.startsWith("image/") == true -> "Send Photo"
+                        selectedMimeType?.startsWith("audio/") == true -> "Send Audio"
+                        else -> "Send Document"
                     },
+                    onClick = ::sendSelectedAttachment,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

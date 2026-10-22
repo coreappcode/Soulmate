@@ -116,7 +116,7 @@ fun ChatInfoScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "${user.name}, ${user.age}",
+                text = user.nameWithAge,
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 22.sp,

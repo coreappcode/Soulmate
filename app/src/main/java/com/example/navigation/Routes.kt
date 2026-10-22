@@ -12,8 +12,6 @@ object Routes {
     const val PHOTOS = "photos"
     const val ADD_PHOTO = "add_photo"
     const val FACE_CAPTURE = "face_capture"
-    const val VERIFY_PROCESSING = "verify_processing"
-    const val VERIFY_SUCCESS = "verify_success"
     const val ABOUT_YOU = "about_you"
     const val PERMISSIONS = "permissions"
     const val DASHBOARD = "dashboard"
@@ -32,7 +30,6 @@ object Routes {
     const val ITS_A_MATCH = "explore/its_a_match"
 
     // Chats Sub-screens
-    const val CHAT_VERIFY_TO_UNLOCK = "chat/verify_to_unlock"
     const val CHAT_THREAD = "chat/thread"
     const val CHAT_OPTIONS = "chat/options"
     const val CHAT_INFO = "chat/info"

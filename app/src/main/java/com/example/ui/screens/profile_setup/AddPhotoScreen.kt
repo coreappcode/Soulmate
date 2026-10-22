@@ -1,10 +1,12 @@
 package com.example.ui.screens.profile_setup
 
-import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +29,10 @@ import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,8 +51,7 @@ import com.example.ui.theme.InterFontFamily
 import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import java.io.File
-import java.io.FileOutputStream
+import com.example.utils.createCameraCaptureUri
 
 @Composable
 fun AddPhotoScreen(
@@ -54,30 +59,55 @@ fun AddPhotoScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    var photoError by remember { mutableStateOf<String?>(null) }
+    var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Real Android Photo Picker launcher using ActivityResultContracts.PickVisualMedia
+    val cropImageLauncher = rememberLauncherForActivityResult(
+        contract = CropImageContract()
+    ) { result ->
+        if (result.isSuccessful) {
+            val croppedUri = result.uriContent
+            if (croppedUri != null) {
+                photoError = null
+                onPhotoAdded(croppedUri.toString())
+            } else {
+                photoError = "The cropper did not return an image. Please try again."
+            }
+        } else if (result.error != null) {
+            photoError = result.error?.localizedMessage ?: "Unable to crop this photo."
+        }
+    }
+
+    fun cropPhoto(uri: Uri) {
+        cropImageLauncher.launch(
+            CropImageContractOptions(
+                uri = uri,
+                cropImageOptions = CropImageOptions(
+                    fixAspectRatio = true,
+                    aspectRatioX = 3,
+                    aspectRatioY = 4,
+                    outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG
+                )
+            )
+        )
+    }
+
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            onPhotoAdded(uri.toString())
+            cropPhoto(uri)
         }
     }
 
-    // Camera capture launcher for snapping fresh photo
     val takePictureLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap: Bitmap? ->
-        if (bitmap != null) {
-            try {
-                val photoFile = File(context.cacheDir, "camera_snap_${System.currentTimeMillis()}.jpg")
-                FileOutputStream(photoFile).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
-                }
-                onPhotoAdded(photoFile.toURI().toString())
-            } catch (e: Exception) {
-                onPhotoAdded("https://picsum.photos/seed/cam_${System.currentTimeMillis()}/400/600")
-            }
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uri = cameraCaptureUri
+        if (success && uri != null) {
+            cropPhoto(uri)
+        } else if (uri != null) {
+            photoError = "The camera did not capture a photo."
         }
     }
 
@@ -107,6 +137,14 @@ fun AddPhotoScreen(
                 modifier = Modifier.padding(bottom = 32.dp)
             )
 
+            if (!photoError.isNullOrBlank()) {
+                Text(
+                    text = photoError.orEmpty(),
+                    color = androidx.compose.ui.graphics.Color(0xFFB42318),
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
             // Card 1: Choose from Gallery (Android Photo Picker)
             PhotoSourceCard(
                 title = "Choose from Gallery",
@@ -128,7 +166,10 @@ fun AddPhotoScreen(
                 subtitle = "Use camera to snap a fresh picture",
                 icon = Icons.Default.CameraAlt,
                 onClick = {
-                    takePictureLauncher.launch(null)
+                    photoError = null
+                    val uri = context.createCameraCaptureUri("profile_photo")
+                    cameraCaptureUri = uri
+                    takePictureLauncher.launch(uri)
                 },
                 tag = "take_photo_card"
             )

@@ -32,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,13 +46,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ChatConversation
-import com.example.data.MockData
 import com.example.data.User
 import com.example.ui.components.GradientButton
 import com.example.ui.components.SoulAvatar
 import com.example.ui.components.SoulSearchBar
 import com.example.ui.components.SoulTopBar
-import com.example.ui.screens.system.CardSkeleton
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.AuroraHorizontalGradient
 import com.example.ui.theme.ElevatedSurface
@@ -66,26 +63,18 @@ import com.example.ui.theme.RosePrimary
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatListScreen(
     conversations: List<ChatConversation>,
     onSelectConversation: (ChatConversation) -> Unit,
-    onRequireVerifyToUnlock: (User) -> Unit,
     onLongPressConversation: (ChatConversation) -> Unit,
     onNewChatClick: () -> Unit,
     onGoToExplore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        delay(600)
-        isLoading = false
-    }
 
     val filteredConversations = conversations.filter {
         it.user.name.contains(searchQuery, ignoreCase = true) ||
@@ -133,13 +122,7 @@ fun ChatListScreen(
             )
         }
 
-        if (isLoading) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                repeat(5) {
-                    CardSkeleton(modifier = Modifier.padding(vertical = 6.dp))
-                }
-            }
-        } else if (filteredConversations.isEmpty()) {
+        if (filteredConversations.isEmpty()) {
             // Empty state: illustration + "No chats yet" + Go to Explore CTA
             Box(
                 modifier = Modifier
@@ -218,19 +201,14 @@ fun ChatListScreen(
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            items(MockData.users.take(7)) { user ->
+                            items(conversations.distinctBy { it.user.id }.take(7)) { conversation ->
+                                val user = conversation.user
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier
                                         .width(64.dp)
                                         .clickable {
-                                            if (user.verified) {
-                                                val conv = conversations.firstOrNull { it.user.id == user.id }
-                                                    ?: ChatConversation("c_${user.id}", user, "Hi!", "Now")
-                                                onSelectConversation(conv)
-                                            } else {
-                                                onRequireVerifyToUnlock(user)
-                                            }
+                                            onSelectConversation(conversation)
                                         }
                                 ) {
                                     SoulAvatar(
@@ -270,11 +248,7 @@ fun ChatListScreen(
                             .fillMaxWidth()
                             .combinedClickable(
                                 onClick = {
-                                    if (isVerified) {
-                                        onSelectConversation(conv)
-                                    } else {
-                                        onRequireVerifyToUnlock(user)
-                                    }
+                                    onSelectConversation(conv)
                                 },
                                 onLongClick = {
                                     onLongPressConversation(conv)

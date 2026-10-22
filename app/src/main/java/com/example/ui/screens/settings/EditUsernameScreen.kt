@@ -43,28 +43,41 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.utils.Validators
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun EditUsernameScreen(
     currentUsername: String,
+    onCheckAvailability: suspend (String) -> Boolean,
     onSave: (String) -> Unit,
     onBack: () -> Unit
 ) {
     var username by remember { mutableStateOf(currentUsername) }
     var isChecking by remember { mutableStateOf(false) }
     var isAvailable by remember { mutableStateOf(true) }
+    var availabilityError by remember { mutableStateOf<String?>(null) }
 
     val isValidFormat = Validators.isValidUsername(username)
 
     LaunchedEffect(username) {
         if (isValidFormat && username.length >= 5) {
             isChecking = true
+            availabilityError = null
             delay(400)
-            isChecking = false
-            isAvailable = !listOf("admin", "soulmate", "help", "support").contains(username.lowercase())
+            try {
+                isAvailable = onCheckAvailability(username)
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                isAvailable = false
+                availabilityError = exception.localizedMessage
+                    ?: "Unable to check username availability."
+            } finally {
+                isChecking = false
+            }
         } else {
             isChecking = false
             isAvailable = false
+            availabilityError = null
         }
     }
 
@@ -161,6 +174,12 @@ fun EditUsernameScreen(
                                 color = SemanticOnline
                             )
                         }
+                    } else if (availabilityError != null) {
+                        Text(
+                            text = availabilityError.orEmpty(),
+                            fontSize = 11.sp,
+                            color = Color.Red
+                        )
                     }
                 }
             )

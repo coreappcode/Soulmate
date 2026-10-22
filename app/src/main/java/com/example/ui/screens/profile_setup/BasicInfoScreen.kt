@@ -62,6 +62,7 @@ import com.example.ui.theme.OrchidPrimary
 import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.utils.Validators
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -115,7 +116,9 @@ fun BasicInfoScreen(
         }
     }
 
-    val isFormValid = fullName.trim().length >= 2 && dateOfBirth.isNotBlank() && gender.isNotBlank()
+    val isFormValid = Validators.isValidName(fullName) &&
+        Validators.isValidAdultDateOfBirth(dateOfBirth) &&
+        gender.isNotBlank()
 
     Column(
         modifier = Modifier

@@ -1,5 +1,9 @@
 package com.example.ui.screens.system
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +20,8 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,10 +43,20 @@ import com.example.ui.theme.TextSecondary
 
 @Composable
 fun LocationRequiredScreen(
-    onEnableLocation: () -> Unit = {},
+    onEnableLocation: (Boolean) -> Unit = {},
     onContinueCountryOnly: () -> Unit = {},
     onBack: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    val locationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        onEnableLocation(
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -89,7 +105,7 @@ fun LocationRequiredScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Soulmate uses your precise location to show you potential matches in your neighborhood, cafe spots, and campus radius.",
+                text = "Location permission is optional. Discovery currently uses profile city and country; exact-distance matching is not configured.",
                 fontFamily = InterFontFamily,
                 fontSize = 15.sp,
                 color = TextSecondary,
@@ -102,7 +118,23 @@ fun LocationRequiredScreen(
 
             GradientButton(
                 text = "Enable Location",
-                onClick = onEnableLocation,
+                onClick = {
+                    val alreadyGranted =
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                            PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                            PackageManager.PERMISSION_GRANTED
+                    if (alreadyGranted) {
+                        onEnableLocation(true)
+                    } else {
+                        locationLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(0.85f)
             )
 

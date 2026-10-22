@@ -13,7 +13,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.soulmate.androidapp"
+    applicationId = "com.soulmate.android"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -108,12 +108,16 @@ dependencies {
   // implementation(libs.androidx.room.runtime)
   implementation(libs.coil)
   implementation(libs.coil.compose)
+  implementation(libs.android.image.cropper)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)
 
   implementation(libs.firebase.auth)
+  implementation(libs.firebase.firestore)
+  implementation(libs.firebase.storage)
+  implementation(libs.kotlinx.coroutines.play.services)
   // Uncomment the following dependencies together to use Google Sign-In via Credential Manager:
   // implementation(libs.androidx.credentials)
   // implementation(libs.androidx.credentials.play.services)

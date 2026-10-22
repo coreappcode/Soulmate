@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -29,8 +30,6 @@ import com.example.ui.screens.profile_setup.FaceCaptureScreen
 import com.example.ui.screens.profile_setup.PermissionsScreen
 import com.example.ui.screens.profile_setup.PhotosSetupScreen
 import com.example.ui.screens.profile_setup.UsernameScreen
-import com.example.ui.screens.profile_setup.VerificationProcessingScreen
-import com.example.ui.screens.profile_setup.VerificationSuccessScreen
 import com.example.ui.screens.splash.SplashScreen
 import com.example.utils.findActivity
 
@@ -42,6 +41,17 @@ fun SoulmateNavGraph(
     val uiState by viewModel.uiState.collectAsState()
     val phoneAuthState by viewModel.phoneAuthState.collectAsState()
     val activity = LocalContext.current.findActivity()
+    val context = LocalContext.current
+
+    LaunchedEffect(uiState.dataError) {
+        val dashboardVisible = navController.currentDestination?.route in
+            setOf(Routes.DASHBOARD, Routes.DASHBOARD_PROFILE)
+        if (!dashboardVisible) {
+            uiState.dataError?.let { message ->
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     LaunchedEffect(phoneAuthState.codeSentVersion) {
         if (
@@ -52,17 +62,24 @@ fun SoulmateNavGraph(
         }
     }
 
-    LaunchedEffect(uiState.isPhoneVerified) {
+    LaunchedEffect(
+        uiState.isPhoneVerified,
+        uiState.isProfileLoading,
+        uiState.isOnboardingComplete
+    ) {
         val currentRoute = navController.currentDestination?.route
         if (
             uiState.isPhoneVerified &&
-            (currentRoute == Routes.PHONE_ENTRY || currentRoute == Routes.OTP_VERIFY)
+            !uiState.isProfileLoading &&
+            (currentRoute == Routes.SPLASH ||
+                currentRoute == Routes.PHONE_ENTRY ||
+                currentRoute == Routes.OTP_VERIFY)
         ) {
-            navController.navigate(Routes.BASIC_INFO) {
-                popUpTo(Routes.LANDING) { inclusive = true }
+            val destination = if (uiState.isOnboardingComplete) Routes.DASHBOARD else Routes.BASIC_INFO
+            navController.navigate(destination) {
+                popUpTo(0) { inclusive = true }
             }
         }
-
     }
 
     NavHost(
@@ -97,10 +114,15 @@ fun SoulmateNavGraph(
         composable(Routes.SPLASH) {
             SplashScreen(
                 onTimeout = {
-                    val destination =
-                        if (uiState.isPhoneVerified) Routes.DASHBOARD else Routes.LANDING
-                    navController.navigate(destination) {
-                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    if (!uiState.isProfileLoading) {
+                        val destination = if (uiState.isPhoneVerified) {
+                            if (uiState.isOnboardingComplete) Routes.DASHBOARD else Routes.BASIC_INFO
+                        } else {
+                            Routes.LANDING
+                        }
+                        navController.navigate(destination) {
+                            popUpTo(Routes.SPLASH) { inclusive = true }
+                        }
                     }
                 }
             )
@@ -219,6 +241,7 @@ fun SoulmateNavGraph(
             UsernameScreen(
                 username = uiState.username,
                 onUsernameChange = { viewModel.updateUsername(it) },
+                onCheckAvailability = { viewModel.isUsernameAvailable(it) },
                 onContinue = { navController.navigate(Routes.PHOTOS) },
                 onBack = { navController.popBackStack() }
             )
@@ -229,9 +252,10 @@ fun SoulmateNavGraph(
             PhotosSetupScreen(
                 photos = uiState.photos,
                 onAddPhotoClick = { navController.navigate(Routes.ADD_PHOTO) },
-                onPhotoSelected = { viewModel.addPhoto(it) },
                 onRemovePhoto = { viewModel.removePhoto(it) },
                 onSetMainPhoto = { viewModel.setMainPhoto(it) },
+                isUploading = uiState.isUploadingPhoto,
+                errorMessage = uiState.dataError,
                 onContinue = { navController.navigate(Routes.ABOUT_YOU) },
                 onBack = { navController.popBackStack() }
             )
@@ -248,35 +272,14 @@ fun SoulmateNavGraph(
             )
         }
 
-        // 9. Face Capture Screen (Accessible from Profile page)
+        // Selfie capture stores the image for review; it does not claim identity verification.
         composable(Routes.FACE_CAPTURE) {
             FaceCaptureScreen(
                 onFaceCaptured = { selfieUrl ->
                     viewModel.setCapturedSelfie(selfieUrl)
-                    navController.navigate(Routes.VERIFY_PROCESSING)
+                    navController.popBackStack()
                 },
                 onBack = { navController.popBackStack() }
-            )
-        }
-
-        // 10. Verification Processing Screen
-        composable(Routes.VERIFY_PROCESSING) {
-            VerificationProcessingScreen(
-                onVerificationComplete = {
-                    viewModel.setFaceVerified(true)
-                    navController.navigate(Routes.VERIFY_SUCCESS)
-                }
-            )
-        }
-
-        // 11. Verification Success Screen (Returns to Profile page)
-        composable(Routes.VERIFY_SUCCESS) {
-            VerificationSuccessScreen(
-                onContinue = {
-                    navController.navigate(Routes.DASHBOARD_PROFILE) {
-                        popUpTo(Routes.DASHBOARD) { inclusive = false }
-                    }
-                }
             )
         }
 
@@ -299,16 +302,22 @@ fun SoulmateNavGraph(
             PermissionsScreen(
                 locationAllowed = uiState.locationPermissionGranted,
                 notificationsAllowed = uiState.notificationsPermissionGranted,
-                onAllowLocation = { viewModel.setLocationPermission(true) },
-                onAllowNotifications = { viewModel.setNotificationsPermission(true) },
+                onAllowLocation = { granted -> viewModel.setLocationPermission(granted) },
+                onAllowNotifications = { granted -> viewModel.setNotificationsPermission(granted) },
+                isSaving = uiState.isSavingProfile,
+                errorMessage = uiState.dataError,
                 onEnterSoulmate = {
-                    navController.navigate(Routes.DASHBOARD) {
-                        popUpTo(0) { inclusive = true }
+                    viewModel.completeOnboarding {
+                        navController.navigate(Routes.DASHBOARD) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 },
                 onSkip = {
-                    navController.navigate(Routes.DASHBOARD) {
-                        popUpTo(0) { inclusive = true }
+                    viewModel.completeOnboarding {
+                        navController.navigate(Routes.DASHBOARD) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 }
             )
@@ -370,9 +379,9 @@ fun SoulmateNavGraph(
 
         composable(Routes.SYSTEM_LOCATION_REQUIRED) {
             com.example.ui.screens.system.LocationRequiredScreen(
-                onEnableLocation = {
-                    viewModel.setLocationPermission(true)
-                    navController.popBackStack()
+                onEnableLocation = { granted ->
+                    viewModel.setLocationPermission(granted)
+                    if (granted) navController.popBackStack()
                 },
                 onContinueCountryOnly = {
                     navController.popBackStack()

@@ -77,6 +77,13 @@ fun NotificationSettingsScreen(
                 .padding(20.dp)
         ) {
             Text(
+                text = "These preferences are saved to your account. Push and email delivery are not configured in this build.",
+                fontFamily = InterFontFamily,
+                fontSize = 13.sp,
+                color = TextSecondary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Text(
                 text = "Activity Toggles",
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Bold,

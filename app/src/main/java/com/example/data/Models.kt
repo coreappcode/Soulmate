@@ -10,17 +10,24 @@ data class User(
     val photos: List<String>,
     val distance: String,
     val country: String,
-    val city: String = "Mumbai",
+    val city: String = "",
     val verified: Boolean,
     val interests: List<String>,
     val lookingFor: List<String>,
-    val height: String = "5'10\"",
-    val job: String = "Designer",
-    val education: String = "Graduate",
-    val zodiac: String = "Leo",
-    val isOnline: Boolean = true,
-    val isNew: Boolean = false
-)
+    val height: String = "",
+    val job: String = "",
+    val education: String = "",
+    val zodiac: String = "",
+    val isOnline: Boolean = false,
+    val isNew: Boolean = false,
+    val ageVisible: Boolean = true
+) {
+    val nameWithAge: String
+        get() = if (ageVisible && age > 0) "$name, $age" else name
+
+    val ageLabel: String
+        get() = if (ageVisible && age > 0) "$age yrs" else ""
+}
 
 data class Country(
     val name: String,
@@ -33,32 +40,35 @@ data class UserProfileState(
     val phoneNumber: String = "",
     val otpCode: String = "",
     val isPhoneVerified: Boolean = false,
-    val fullName: String = "Anya Sharma",
-    val dateOfBirth: String = "14/08/1999",
-    val age: Int = 25,
-    val gender: String = "Woman",
-    val username: String = "anya_sharma",
-    val photos: List<String> = listOf(
-        "https://picsum.photos/seed/anya1/600/800",
-        "https://picsum.photos/seed/anya2/600/800",
-        "https://picsum.photos/seed/anya3/600/800"
-    ),
+    val fullName: String = "",
+    val dateOfBirth: String = "",
+    val age: Int = 0,
+    val gender: String = "",
+    val username: String = "",
+    val photos: List<String> = emptyList(),
     val selfieCapturedUrl: String? = null,
-    val isFaceVerified: Boolean = true,
-    val bio: String = "Coffee enthusiast, indie music lover, and UI designer exploring cozy cafes. Always ready for impromptu weekend getaways and good conversation.",
-    val selectedInterests: List<String> = listOf("Coffee", "Music", "Design", "Travel", "Photography"),
-    val selectedLookingFor: List<String> = listOf("Men"),
-    val city: String = "Mumbai",
-    val email: String = "anya.sharma@example.com",
-    val height: String = "5'6\"",
-    val job: String = "Product Designer",
-    val education: String = "NID Ahmedabad",
-    val zodiac: String = "Leo",
-    val locationPermissionGranted: Boolean = true,
-    val notificationsPermissionGranted: Boolean = true
+    val isFaceVerified: Boolean = false,
+    val bio: String = "",
+    val selectedInterests: List<String> = emptyList(),
+    val selectedLookingFor: List<String> = emptyList(),
+    val city: String = "",
+    val email: String = "",
+    val height: String = "",
+    val job: String = "",
+    val education: String = "",
+    val zodiac: String = "",
+    val locationPermissionGranted: Boolean = false,
+    val notificationsPermissionGranted: Boolean = false,
+    val isOnboardingComplete: Boolean = false,
+    val isProfileLoading: Boolean = false,
+    val isSavingProfile: Boolean = false,
+    val isUploadingPhoto: Boolean = false,
+    val dataError: String? = null
 ) {
     val formattedPhoneNumber: String
-        get() = if (phoneNumber.startsWith("+")) {
+        get() = if (phoneNumber.isBlank()) {
+            ""
+        } else if (phoneNumber.startsWith("+")) {
             phoneNumber
         } else {
             "${selectedCountry.dialCode} $phoneNumber"
@@ -93,7 +103,8 @@ data class ChatMessage(
     val isOwn: Boolean,
     val timestamp: String,
     val status: MessageStatus = MessageStatus.READ,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val attachmentType: String? = null
 )
 
 data class ChatConversation(

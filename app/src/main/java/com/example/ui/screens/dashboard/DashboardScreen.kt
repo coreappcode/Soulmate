@@ -1,6 +1,7 @@
 package com.example.ui.screens.dashboard
 
 import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +33,6 @@ import com.example.ui.screens.chats.ChatListScreen
 import com.example.ui.screens.chats.ChatOptionsScreen
 import com.example.ui.screens.chats.ChatThreadScreen
 import com.example.ui.screens.chats.SendAttachmentScreen
-import com.example.ui.screens.chats.VerifyToUnlockScreen
 import com.example.ui.screens.explore.ExploreScreen
 import com.example.ui.screens.explore.FiltersScreen
 import com.example.ui.screens.explore.FullProfileScreen
@@ -75,7 +76,6 @@ sealed interface ActiveSubScreen {
 
     // Chat sub-screens
     data class ChatThread(val conversation: ChatConversation) : ActiveSubScreen
-    data class VerifyToUnlock(val user: User) : ActiveSubScreen
     data class ChatOptions(val user: User) : ActiveSubScreen
     data class ChatInfo(val user: User) : ActiveSubScreen
     data object ChatAttachment : ActiveSubScreen
@@ -132,8 +132,18 @@ fun DashboardScreen(
     val matchmakingSettings by viewModel.matchmaking.collectAsState()
     val privacySettings by viewModel.privacySettings.collectAsState()
     val notificationSettings by viewModel.notificationSettings.collectAsState()
+    val usernameSearchResults by viewModel.usernameSearchResults.collectAsState()
     val phoneAuthState by viewModel.phoneAuthState.collectAsState()
-    val phoneAuthActivity = LocalContext.current.findActivity()
+    val context = LocalContext.current
+    val phoneAuthActivity = context.findActivity()
+    val sentRequestIds = remember(sentRequests) { sentRequests.map { it.user.id }.toSet() }
+
+    LaunchedEffect(userProfile.dataError) {
+        userProfile.dataError?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            viewModel.clearDataError()
+        }
+    }
 
     // Handle back button for any active sub-screen
     BackHandler(enabled = activeSubScreen !is ActiveSubScreen.None) {
@@ -180,6 +190,9 @@ fun DashboardScreen(
 
                 is ActiveSubScreen.UsernameSearch -> {
                     UsernameSearchScreen(
+                        results = usernameSearchResults,
+                        sentRequestIds = sentRequestIds,
+                        onSearchQuery = viewModel::searchUsers,
                         onUserClick = { user ->
                             activeSubScreen = ActiveSubScreen.ExploreProfileDetail(user)
                         },
@@ -214,9 +227,10 @@ fun DashboardScreen(
                         matchedUser = sub.user,
                         myPhotoUrl = userProfile.photos.firstOrNull() ?: "",
                         onSendMessage = {
-                            val conv = viewModel.openConversationForUser(sub.user)
-                            currentTab = Routes.DASHBOARD_CHATS
-                            activeSubScreen = ActiveSubScreen.ChatThread(conv)
+                            viewModel.openConversationForUser(sub.user) { conversation ->
+                                currentTab = Routes.DASHBOARD_CHATS
+                                activeSubScreen = ActiveSubScreen.ChatThread(conversation)
+                            }
                         },
                         onKeepSwiping = {
                             activeSubScreen = ActiveSubScreen.None
@@ -245,16 +259,6 @@ fun DashboardScreen(
                     )
                 }
 
-                is ActiveSubScreen.VerifyToUnlock -> {
-                    VerifyToUnlockScreen(
-                        user = sub.user,
-                        onVerifyNow = {
-                            onNavigateToFaceVerify()
-                        },
-                        onMaybeLater = { activeSubScreen = ActiveSubScreen.None }
-                    )
-                }
-
                 is ActiveSubScreen.ChatOptions -> {
                     ChatOptionsScreen(
                         user = sub.user,
@@ -265,7 +269,7 @@ fun DashboardScreen(
                             activeSubScreen = ActiveSubScreen.ChatInfo(sub.user)
                         },
                         onMute = {
-                            activeSubScreen = ActiveSubScreen.None
+                            Toast.makeText(context, "Chat muting is not available yet.", Toast.LENGTH_LONG).show()
                         },
                         onClearChat = {
                             viewModel.clearActiveChat()
@@ -276,8 +280,7 @@ fun DashboardScreen(
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onReportUser = {
-                            viewModel.blockUser(sub.user)
-                            activeSubScreen = ActiveSubScreen.None
+                            Toast.makeText(context, "Reporting is not configured. This user was not blocked.", Toast.LENGTH_LONG).show()
                         },
                         onDeleteChat = {
                             viewModel.deleteActiveChat()
@@ -290,9 +293,15 @@ fun DashboardScreen(
                 is ActiveSubScreen.ChatInfo -> {
                     ChatInfoScreen(
                         user = sub.user,
-                        onCallClick = {},
-                        onVideoClick = {},
-                        onMuteClick = {},
+                        onCallClick = {
+                            Toast.makeText(context, "Audio calls are not available yet.", Toast.LENGTH_LONG).show()
+                        },
+                        onVideoClick = {
+                            Toast.makeText(context, "Video calls are not available yet.", Toast.LENGTH_LONG).show()
+                        },
+                        onMuteClick = {
+                            Toast.makeText(context, "Chat muting is not available yet.", Toast.LENGTH_LONG).show()
+                        },
                         onBlockClick = {
                             viewModel.blockUser(sub.user)
                             activeSubScreen = ActiveSubScreen.None
@@ -307,8 +316,8 @@ fun DashboardScreen(
 
                 is ActiveSubScreen.ChatAttachment -> {
                     SendAttachmentScreen(
-                        onSendImage = { imageUrl, caption ->
-                            viewModel.sendMessage(caption, imageUrl)
+                        onSendAttachment = { uri, caption, mimeType ->
+                            viewModel.sendMessage(caption, uri.toString(), mimeType)
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onBack = { activeSubScreen = ActiveSubScreen.None }
@@ -347,9 +356,10 @@ fun DashboardScreen(
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onSendMessage = {
-                            val conv = viewModel.openConversationForUser(sub.user)
-                            currentTab = Routes.DASHBOARD_CHATS
-                            activeSubScreen = ActiveSubScreen.ChatThread(conv)
+                            viewModel.openConversationForUser(sub.user) { conversation ->
+                                currentTab = Routes.DASHBOARD_CHATS
+                                activeSubScreen = ActiveSubScreen.ChatThread(conversation)
+                            }
                         },
                         onBack = { activeSubScreen = ActiveSubScreen.None }
                     )
@@ -357,6 +367,8 @@ fun DashboardScreen(
 
                 is ActiveSubScreen.FindFriends -> {
                     FindFriendsScreen(
+                        candidates = exploreDeck,
+                        sentRequestIds = sentRequestIds,
                         onConnect = { user ->
                             viewModel.sendFriendRequest(user)
                         },
@@ -381,7 +393,7 @@ fun DashboardScreen(
 
                 is ActiveSubScreen.VerificationStatus -> {
                     VerificationStatusScreen(
-                        isVerified = userProfile.isFaceVerified,
+                        hasUploadedSelfie = !userProfile.selfieCapturedUrl.isNullOrBlank(),
                         onVerifyNow = onNavigateToFaceVerify,
                         onReverify = onNavigateToFaceVerify,
                         onBack = { activeSubScreen = ActiveSubScreen.None }
@@ -412,10 +424,6 @@ fun DashboardScreen(
 
                 is ActiveSubScreen.ProPlans -> {
                     ProPlansScreen(
-                        onSubscribe = {
-                            viewModel.setProUser(true)
-                            activeSubScreen = ActiveSubScreen.None
-                        },
                         onBack = { activeSubScreen = ActiveSubScreen.None }
                     )
                 }
@@ -502,6 +510,7 @@ fun DashboardScreen(
                 is ActiveSubScreen.EditUsername -> {
                     EditUsernameScreen(
                         currentUsername = userProfile.username,
+                        onCheckAvailability = { viewModel.isUsernameAvailable(it) },
                         onSave = { newUsername ->
                             viewModel.updateUsername(newUsername)
                             activeSubScreen = ActiveSubScreen.None
@@ -530,7 +539,6 @@ fun DashboardScreen(
 
                 is ActiveSubScreen.DeleteAccount -> {
                     DeleteAccountScreen(
-                        onConfirmDelete = onLogout,
                         onCancel = { activeSubScreen = ActiveSubScreen.None }
                     )
                 }
@@ -543,7 +551,9 @@ fun DashboardScreen(
                         onRemovePhoto = { viewModel.removePhoto(it) },
                         onSetMainPhoto = { viewModel.setMainPhoto(it) },
                         onSave = { activeSubScreen = ActiveSubScreen.None },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = { activeSubScreen = ActiveSubScreen.None },
+                        isUploading = userProfile.isUploadingPhoto,
+                        errorMessage = userProfile.dataError
                     )
                 }
 
@@ -626,9 +636,6 @@ fun DashboardScreen(
                                         viewModel.selectConversation(conv)
                                         activeSubScreen = ActiveSubScreen.ChatThread(conv)
                                     },
-                                    onRequireVerifyToUnlock = { user ->
-                                        activeSubScreen = ActiveSubScreen.VerifyToUnlock(user)
-                                    },
                                     onLongPressConversation = { conv ->
                                         activeSubScreen = ActiveSubScreen.ChatOptions(conv.user)
                                     },
@@ -656,9 +663,10 @@ fun DashboardScreen(
                                         activeSubScreen = ActiveSubScreen.FriendProfile(friend)
                                     },
                                     onOpenChat = { friend ->
-                                        val conv = viewModel.openConversationForUser(friend)
-                                        currentTab = Routes.DASHBOARD_CHATS
-                                        activeSubScreen = ActiveSubScreen.ChatThread(conv)
+                                        viewModel.openConversationForUser(friend) { conversation ->
+                                            currentTab = Routes.DASHBOARD_CHATS
+                                            activeSubScreen = ActiveSubScreen.ChatThread(conversation)
+                                        }
                                     },
                                     onOpenFindFriends = {
                                         activeSubScreen = ActiveSubScreen.FindFriends
@@ -744,10 +752,16 @@ fun DashboardScreen(
                                     candidates = exploreDeck,
                                     selectedSegment = exploreSegment,
                                     onSegmentChange = { viewModel.setExploreSegment(it) },
-                                    onLike = { user -> viewModel.swipeLike(user) {} },
+                                    onLike = { user ->
+                                        viewModel.swipeLike(user) { matched ->
+                                            activeSubScreen = ActiveSubScreen.ItsAMatch(matched)
+                                        }
+                                    },
                                     onPass = { user -> viewModel.swipePass(user) },
                                     onRewind = { viewModel.rewind() },
-                                    onCardClick = {},
+                                    onCardClick = { user ->
+                                        activeSubScreen = ActiveSubScreen.ExploreProfileDetail(user)
+                                    },
                                     onOpenFilters = { activeSubScreen = ActiveSubScreen.Filters },
                                     onOpenSearch = { activeSubScreen = ActiveSubScreen.UsernameSearch }
                                 )

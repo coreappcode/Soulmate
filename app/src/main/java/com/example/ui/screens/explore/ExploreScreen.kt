@@ -529,7 +529,7 @@ private fun SwipeCardItem(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${user.name}, ${user.age}",
+                        text = user.nameWithAge,
                         fontFamily = PoppinsFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 26.sp,

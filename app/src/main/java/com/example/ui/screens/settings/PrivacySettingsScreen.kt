@@ -77,6 +77,13 @@ fun PrivacySettingsScreen(
                 .padding(20.dp)
         ) {
             Text(
+                text = "Age visibility is enforced on public profiles. Online presence, distance display, non-friend messaging, and read receipts are not configured in this build.",
+                fontFamily = InterFontFamily,
+                fontSize = 13.sp,
+                color = TextSecondary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Text(
                 text = "Profile Visibility",
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Bold,

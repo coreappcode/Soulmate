@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -37,6 +38,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,11 +82,14 @@ private data class ConfettiParticle(
 fun PermissionsScreen(
     locationAllowed: Boolean,
     notificationsAllowed: Boolean,
-    onAllowLocation: () -> Unit,
-    onAllowNotifications: () -> Unit,
+    onAllowLocation: (Boolean) -> Unit,
+    onAllowNotifications: (Boolean) -> Unit,
+    isSaving: Boolean = false,
+    errorMessage: String? = null,
     onEnterSoulmate: () -> Unit,
     onSkip: () -> Unit
 ) {
+    val context = LocalContext.current
     var isCelebrating by remember { mutableStateOf(false) }
     val confettiProgress = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
@@ -94,18 +100,34 @@ fun PermissionsScreen(
     ) { permissions ->
         val fine = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
         val coarse = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-        if (fine || coarse) {
-            onAllowLocation()
-        }
+        onAllowLocation(fine || coarse)
     }
 
     // Real Android Notifications Permission Request Launcher
     val notificationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
-            onAllowNotifications()
-        }
+        onAllowNotifications(granted)
+    }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val hasLocation = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (hasLocation != locationAllowed) onAllowLocation(hasLocation)
+
+        val hasNotifications = NotificationManagerCompat.from(context).areNotificationsEnabled() &&
+            (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+        if (hasNotifications != notificationsAllowed) onAllowNotifications(hasNotifications)
     }
 
     val particles = remember {
@@ -165,7 +187,6 @@ fun PermissionsScreen(
                             Manifest.permission.ACCESS_COARSE_LOCATION
                         )
                     )
-                    onAllowLocation()
                 },
                 tag = "allow_location_card"
             )
@@ -181,17 +202,33 @@ fun PermissionsScreen(
                 onAllow = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        onAllowNotifications(
+                            NotificationManagerCompat.from(context).areNotificationsEnabled()
+                        )
                     }
-                    onAllowNotifications()
                 },
                 tag = "allow_notifications_card"
             )
 
             Spacer(modifier = Modifier.weight(1f))
 
+            if (!errorMessage.isNullOrBlank()) {
+                Text(
+                    text = errorMessage,
+                    fontFamily = InterFontFamily,
+                    fontSize = 13.sp,
+                    color = RosePrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
+            }
+
             GradientButton(
                 text = "Enter Soulmate",
                 onClick = {
+                    if (isSaving || isCelebrating) return@GradientButton
                     isCelebrating = true
                     coroutineScope.launch {
                         confettiProgress.animateTo(
@@ -199,17 +236,21 @@ fun PermissionsScreen(
                             animationSpec = tween(1000, easing = LinearEasing)
                         )
                         delay(200)
+                        isCelebrating = false
+                        confettiProgress.snapTo(0f)
                         onEnterSoulmate()
                     }
                 },
+                enabled = !isSaving && !isCelebrating,
+                loading = isSaving || isCelebrating,
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             SoulTextButton(
-                text = "Skip for now",
-                onClick = onSkip,
+                text = if (isSaving) "Saving profile..." else "Skip for now",
+                onClick = { if (!isSaving && !isCelebrating) onSkip() },
                 color = TextSecondary,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )

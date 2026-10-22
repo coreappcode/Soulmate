@@ -49,38 +49,51 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.utils.Validators
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 
 private enum class AvailabilityState {
     IDLE,
     CHECKING,
     AVAILABLE,
-    TAKEN
+    TAKEN,
+    ERROR
 }
 
 @Composable
 fun UsernameScreen(
     username: String,
     onUsernameChange: (String) -> Unit,
+    onCheckAvailability: suspend (String) -> Boolean,
     onContinue: () -> Unit,
     onBack: () -> Unit
 ) {
     var availability by remember { mutableStateOf(AvailabilityState.IDLE) }
+    var availabilityError by remember { mutableStateOf<String?>(null) }
 
     val hasLength = Validators.isValidUsernameLength(username)
     val hasValidChars = Validators.isValidUsernameChars(username)
 
-    // Debounced fake availability check
+    // The final claim is also rechecked transactionally when the profile is saved.
     LaunchedEffect(username) {
         if (hasLength && hasValidChars) {
             availability = AvailabilityState.CHECKING
-            delay(800)
-            availability = if (username.lowercase() == "admin" || username.lowercase() == "soulmate") {
-                AvailabilityState.TAKEN
-            } else {
-                AvailabilityState.AVAILABLE
+            availabilityError = null
+            delay(350)
+            try {
+                availability = if (onCheckAvailability(username)) {
+                    AvailabilityState.AVAILABLE
+                } else {
+                    AvailabilityState.TAKEN
+                }
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                availability = AvailabilityState.ERROR
+                availabilityError = exception.localizedMessage
+                    ?: "Unable to check username availability."
             }
         } else {
             availability = AvailabilityState.IDLE
+            availabilityError = null
         }
     }
 
@@ -195,7 +208,7 @@ fun UsernameScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             // Validation Rule 3: Availability check
-            AvailabilityRow(state = availability)
+            AvailabilityRow(state = availability, errorMessage = availabilityError)
         }
 
         // Bottom sticky button
@@ -254,7 +267,8 @@ private fun ValidationRow(
 
 @Composable
 private fun AvailabilityRow(
-    state: AvailabilityState
+    state: AvailabilityState,
+    errorMessage: String?
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically
@@ -314,6 +328,21 @@ private fun AvailabilityRow(
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "Username already taken",
+                    fontFamily = InterFontFamily,
+                    fontSize = 13.sp,
+                    color = SemanticError
+                )
+            }
+            AvailabilityState.ERROR -> {
+                Icon(
+                    imageVector = Icons.Filled.HighlightOff,
+                    contentDescription = null,
+                    tint = SemanticError,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = errorMessage ?: "Availability check failed",
                     fontFamily = InterFontFamily,
                     fontSize = 13.sp,
                     color = SemanticError

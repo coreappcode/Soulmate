@@ -26,10 +26,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,9 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.GradientButton
 import com.example.ui.components.SoulOutlinedButton
-import com.example.ui.components.SoulTextField
 import com.example.ui.components.SoulTopBar
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.CardBackground
@@ -54,11 +48,8 @@ import com.example.ui.theme.TextSecondary
 
 @Composable
 fun DeleteAccountScreen(
-    onConfirmDelete: () -> Unit,
     onCancel: () -> Unit
 ) {
-    var confirmText by remember { mutableStateOf("") }
-    val isDeleteConfirmed = confirmText.trim() == "DELETE"
     val scrollState = rememberScrollState()
 
     Column(
@@ -99,14 +90,14 @@ fun DeleteAccountScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Warning: Permanent Action",
+                            text = "Account deletion is unavailable",
                             fontFamily = PoppinsFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = Color(0xFF991B1B)
                         )
                         Text(
-                            text = "Once your account is deleted, your data cannot be recovered.",
+                            text = "This app build cannot delete accounts. No data will be removed here.",
                             fontFamily = InterFontFamily,
                             fontSize = 12.sp,
                             color = Color(0xFFB91C1C)
@@ -119,7 +110,7 @@ fun DeleteAccountScreen(
 
             // "What will be deleted" list
             Text(
-                text = "What will be permanently deleted:",
+                text = "Your account data remains stored:",
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
@@ -137,10 +128,9 @@ fun DeleteAccountScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     listOf(
-                        "All matches, ongoing conversations & media messages",
-                        "Your verified identity and face biometrics token",
-                        "Profile photos, bio, interests, and discovery settings",
-                        "Active Soulmate Pro subscriptions and credits"
+                        "Your profile and uploaded media",
+                        "Your matches, conversations, and messages",
+                        "Your privacy and discovery settings"
                     ).forEach { item ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -174,22 +164,11 @@ fun DeleteAccountScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Confirmation text field
             Text(
-                text = "Type DELETE to confirm deletion:",
-                fontFamily = PoppinsFontFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
+                text = "No deletion request has been submitted. Contact the app developer for account removal.",
+                fontFamily = InterFontFamily,
+                fontSize = 13.sp,
                 color = TextPrimary
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            SoulTextField(
-                label = "",
-                value = confirmText,
-                onValueChange = { confirmText = it },
-                placeholder = "Type DELETE in uppercase"
             )
 
             Spacer(modifier = Modifier.height(30.dp))
@@ -203,23 +182,11 @@ fun DeleteAccountScreen(
                 .border(width = 1.dp, color = Color(0xFF000000).copy(alpha = 0.08f))
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                SoulOutlinedButton(
-                    text = "Cancel",
-                    onClick = onCancel,
-                    modifier = Modifier.weight(1f)
-                )
-
-                GradientButton(
-                    text = "Delete Forever",
-                    onClick = onConfirmDelete,
-                    enabled = isDeleteConfirmed,
-                    modifier = Modifier.weight(1.3f)
-                )
-            }
+            SoulOutlinedButton(
+                text = "Close",
+                onClick = onCancel,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

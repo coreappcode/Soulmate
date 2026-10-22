@@ -37,7 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.Country
-import com.example.data.MockData
+import com.example.data.CountryCatalog
 import com.example.ui.components.SoulSearchBar
 import com.example.ui.components.SoulTopBar
 import com.example.ui.theme.AppBackground
@@ -62,9 +62,9 @@ fun CountryPickerScreen(
 
     val filteredCountries = remember(searchQuery) {
         if (searchQuery.isBlank()) {
-            MockData.allCountries
+            CountryCatalog.allCountries
         } else {
-            MockData.allCountries.filter {
+            CountryCatalog.allCountries.filter {
                 it.name.contains(searchQuery, ignoreCase = true) ||
                     it.dialCode.contains(searchQuery, ignoreCase = true)
             }
@@ -111,7 +111,7 @@ fun CountryPickerScreen(
                     HeaderTitle("Popular")
                 }
 
-                items(MockData.popularCountries) { country ->
+                items(CountryCatalog.popularCountries) { country ->
                     CountryRow(
                         country = country,
                         isSelected = country.name == selectedCountry.name,

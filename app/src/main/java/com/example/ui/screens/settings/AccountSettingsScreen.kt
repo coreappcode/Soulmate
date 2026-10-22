@@ -141,18 +141,26 @@ fun AccountSettingsScreen(
                     AccountOptionRow(
                         icon = Icons.Default.CloudDownload,
                         title = "Download My Data",
-                        value = "Request JSON archive",
+                        value = "Unavailable in this build",
                         onClick = {
-                            Toast.makeText(context, "Your data archive link will be sent to ${userProfile.email}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                context,
+                                "Data export is not configured. No archive was created.",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     )
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
                     AccountOptionRow(
                         icon = Icons.Default.PauseCircle,
                         title = "Deactivate Account",
-                        value = "Pause profile visibility",
+                        value = "Unavailable in this build",
                         onClick = {
-                            Toast.makeText(context, "Account paused. You won't be shown to new users.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                "Account deactivation is not configured. Your profile remains active.",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     )
                 }

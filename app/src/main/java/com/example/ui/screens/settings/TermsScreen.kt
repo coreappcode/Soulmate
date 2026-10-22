@@ -76,7 +76,7 @@ fun TermsScreen(onBack: () -> Unit) {
 
             TermsSection(
                 title = "5. Termination",
-                body = "You may delete your account at any time through Settings. Soulmate reserves the right to suspend or terminate accounts that breach safety guidelines or engage in abusive interactions."
+                body = "In-app account deletion is not available in this build. Contact the app developer to request account removal. Soulmate may suspend or terminate accounts that breach safety guidelines or engage in abusive interactions."
             )
 
             Spacer(modifier = Modifier.height(40.dp))
@@ -133,7 +133,7 @@ fun CommunityRulesScreen(onBack: () -> Unit) {
 
             TermsSection(
                 title = "Zero Tolerance for Scams",
-                body = "Do not solicit money, cryptocurrency, financial investments, or commercial services on Soulmate. Such accounts are promptly reported to authorities."
+                body = "Do not solicit money, cryptocurrency, financial investments, or commercial services on Soulmate. Suspected scams may be reported to the app developer."
             )
 
             Spacer(modifier = Modifier.height(40.dp))

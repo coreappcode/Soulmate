@@ -59,7 +59,6 @@ import com.example.ui.theme.TextSecondary
 
 @Composable
 fun ProPlansScreen(
-    onSubscribe: (planIndex: Int) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -125,7 +124,7 @@ fun ProPlansScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Unleash your full dating potential with premium features",
+                        text = "Subscriptions are not available in this app build.",
                         fontFamily = InterFontFamily,
                         fontSize = 13.sp,
                         color = Color.White.copy(alpha = 0.9f),
@@ -135,6 +134,16 @@ fun ProPlansScreen(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "The benefits and prices below are examples only. No purchase can be made or restored here.",
+                fontFamily = InterFontFamily,
+                fontSize = 13.sp,
+                color = TextSecondary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Feature List
             Card(
@@ -146,11 +155,11 @@ fun ProPlansScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     listOf(
-                        "Unlimited Rewinds — never lose an accidental swipe" to true,
-                        "See Who Likes You before swiping" to true,
-                        "Global Passport — match with anyone anywhere" to true,
-                        "5 Free Introductions each week" to true,
-                        "Zero Ads & priority matchmaking algorithms" to true
+                        "Planned: unlimited rewinds" to true,
+                        "Planned: see who likes you" to true,
+                        "Planned: global discovery" to true,
+                        "Planned: weekly introductions" to true,
+                        "Planned: ad-free experience" to true
                     ).forEach { (feat, _) ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -186,9 +195,9 @@ fun ProPlansScreen(
 
             // 3 Pricing Cards (Monthly / 3 Months Save 20% / Lifetime Best Value)
             val plans = listOf(
-                Triple("Monthly", "$9.99 / mo", "Renews monthly"),
-                Triple("3 Months", "$7.99 / mo", "Save 20% • $23.97 billed"),
-                Triple("Lifetime", "$49.99 once", "Best Value • Never pay again")
+                Triple("Monthly", "$9.99 / mo", "Example only — unavailable"),
+                Triple("3 Months", "$7.99 / mo", "Example only — unavailable"),
+                Triple("Lifetime", "$49.99 once", "Example only — unavailable")
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -284,7 +293,11 @@ fun ProPlansScreen(
             SoulTextButton(
                 text = "Restore Purchases",
                 onClick = {
-                    Toast.makeText(context, "Purchases restored successfully!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        "Purchase restoration is not configured. No changes were made.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             )
 
@@ -300,8 +313,14 @@ fun ProPlansScreen(
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
             GradientButton(
-                text = "Subscribe to Soulmate Pro",
-                onClick = { onSubscribe(selectedPlan) },
+                text = "Purchases unavailable",
+                onClick = {
+                    Toast.makeText(
+                        context,
+                        "Billing is not configured. No purchase was made.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                },
                 modifier = Modifier.fillMaxWidth()
             )
         }

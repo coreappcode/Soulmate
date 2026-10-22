@@ -90,7 +90,7 @@ fun MyProfileScreen(
     val clipboardManager = LocalClipboardManager.current
     val scrollState = rememberScrollState()
 
-    val photos = if (userProfile.photos.isNotEmpty()) userProfile.photos else listOf("https://picsum.photos/seed/default/600/800")
+    val photos = userProfile.photos
     val pagerState = rememberPagerState(pageCount = { photos.size })
 
     Column(
@@ -136,16 +136,32 @@ fun MyProfileScreen(
                         .aspectRatio(3f / 4f)
                         .testTag("profile_photo_carousel")
                 ) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        AsyncImage(
-                            model = photos[page],
-                            contentDescription = "Profile Photo $page",
-                            contentScale = ContentScale.Crop,
+                    if (photos.isNotEmpty()) {
+                        HorizontalPager(
+                            state = pagerState,
                             modifier = Modifier.fillMaxSize()
-                        )
+                        ) { page ->
+                            AsyncImage(
+                                model = photos[page],
+                                contentDescription = "Profile Photo $page",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(ElevatedSurface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Add photos to complete your profile",
+                                fontFamily = InterFontFamily,
+                                fontSize = 14.sp,
+                                color = TextSecondary
+                            )
+                        }
                     }
 
                     // Dots indicator
@@ -208,9 +224,9 @@ fun MyProfileScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                val displayName = userProfile.fullName.ifBlank { "Anya" }
+                                val displayName = userProfile.fullName.ifBlank { "Complete your profile" }
                                 Text(
-                                    text = "$displayName, ${userProfile.age}",
+                                    text = if (userProfile.age > 0) "$displayName, ${userProfile.age}" else displayName,
                                     fontFamily = PoppinsFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 26.sp,

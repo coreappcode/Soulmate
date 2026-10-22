@@ -49,7 +49,7 @@ import com.example.ui.theme.TextSecondary
 
 @Composable
 fun VerificationStatusScreen(
-    isVerified: Boolean,
+    hasUploadedSelfie: Boolean,
     onVerifyNow: () -> Unit,
     onReverify: () -> Unit,
     onBack: () -> Unit
@@ -79,7 +79,7 @@ fun VerificationStatusScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp))
                     .then(
-                        if (isVerified) {
+                        if (hasUploadedSelfie) {
                             Modifier
                                 .background(AuroraHorizontalGradient)
                                 .border(2.dp, Color(0xFF000000), RoundedCornerShape(24.dp))
@@ -101,9 +101,9 @@ fun VerificationStatusScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isVerified) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            imageVector = if (hasUploadedSelfie) Icons.Default.CheckCircle else Icons.Default.Warning,
                             contentDescription = null,
-                            tint = if (isVerified) OrchidPrimary else Color(0xFFD97706),
+                            tint = if (hasUploadedSelfie) OrchidPrimary else Color(0xFFD97706),
                             modifier = Modifier.size(36.dp)
                         )
                     }
@@ -111,92 +111,48 @@ fun VerificationStatusScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = if (isVerified) "Profile Verified" else "Verification Pending",
+                        text = if (hasUploadedSelfie) "Selfie uploaded" else "Not verified",
                         fontFamily = PoppinsFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp,
-                        color = if (isVerified) Color.White else Color(0xFF92400E)
+                        color = if (hasUploadedSelfie) Color.White else Color(0xFF92400E)
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = if (isVerified) "Verified on Oct 12, 2026 • Valid for 1 year" else "Verify your face to unlock unlimited messaging & trust",
+                        text = if (hasUploadedSelfie) {
+                            "Your selfie is stored, but no identity-review service is configured."
+                        } else {
+                            "Identity verification is not configured. Uploading a selfie does not verify your identity."
+                        },
                         fontFamily = InterFontFamily,
                         fontSize = 13.sp,
-                        color = if (isVerified) Color.White.copy(alpha = 0.9f) else Color(0xFFB45309)
+                        color = if (hasUploadedSelfie) Color.White.copy(alpha = 0.9f) else Color(0xFFB45309)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // "What verification unlocks" list
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.5.dp, Color(0xFF000000), RoundedCornerShape(20.dp))
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "What Verification Unlocks",
-                        fontFamily = PoppinsFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = TextPrimary
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    listOf(
-                        "Blue Verified Badge on your profile & discovery card" to true,
-                        "3x more likes and mutual match recommendations" to true,
-                        "Direct instant messaging with all soulmates" to true,
-                        "Higher safety score and scam-shield protection" to true
-                    ).forEach { (benefit, isUnlocked) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFD1FAE5)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = SemanticOnline,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = benefit,
-                                fontFamily = InterFontFamily,
-                                fontSize = 13.sp,
-                                color = TextPrimary
-                            )
-                        }
-                    }
-                }
-            }
+            Text(
+                text = "A stored selfie is not an identity check and does not add a verified badge or unlock features.",
+                fontFamily = InterFontFamily,
+                fontSize = 13.sp,
+                color = TextSecondary
+            )
 
             Spacer(modifier = Modifier.weight(1f))
 
-            if (isVerified) {
+            if (hasUploadedSelfie) {
                 SoulOutlinedButton(
-                    text = "Re-verify Face Identity",
+                    text = "Replace selfie",
                     onClick = onReverify,
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
                 GradientButton(
-                    text = "Verify Now",
+                    text = "Upload selfie (not verification)",
                     onClick = onVerifyNow,
                     modifier = Modifier.fillMaxWidth()
                 )

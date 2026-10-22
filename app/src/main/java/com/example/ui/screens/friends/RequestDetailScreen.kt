@@ -139,7 +139,9 @@ fun RequestDetailScreen(
 
             // Age / Distance / Gender pills
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("${user.age} yrs", user.distance, user.gender).forEach { pillText ->
+                listOf(user.ageLabel, user.distance, user.gender)
+                    .filter { it.isNotBlank() }
+                    .forEach { pillText ->
                     Box(
                         modifier = Modifier
                             .clip(PillShape)

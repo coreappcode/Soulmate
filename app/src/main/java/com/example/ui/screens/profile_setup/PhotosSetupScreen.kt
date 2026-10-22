@@ -54,10 +54,6 @@ import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.PhotoLibrary
 import com.example.ui.components.SoulOutlinedButton
 
@@ -65,21 +61,14 @@ import com.example.ui.components.SoulOutlinedButton
 fun PhotosSetupScreen(
     photos: List<String>,
     onAddPhotoClick: () -> Unit,
-    onPhotoSelected: (String) -> Unit = {},
     onRemovePhoto: (Int) -> Unit,
     onSetMainPhoto: (Int) -> Unit,
+    isUploading: Boolean = false,
+    errorMessage: String? = null,
     onContinue: () -> Unit,
     onBack: () -> Unit
 ) {
-    val canContinue = photos.size >= 2
-
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            onPhotoSelected(uri.toString())
-        }
-    }
+    val canContinue = photos.size >= 2 && !isUploading
 
     Column(
         modifier = Modifier
@@ -254,7 +243,7 @@ fun PhotosSetupScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             SoulOutlinedButton(
-                text = "Choose from Gallery",
+                text = if (isUploading) "Uploading photo..." else "Choose Photo",
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.PhotoLibrary,
@@ -263,15 +252,20 @@ fun PhotosSetupScreen(
                         modifier = Modifier.size(18.dp)
                     )
                 },
-                onClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                },
+                onClick = onAddPhotoClick,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("photos_setup_gallery_button")
             )
+            if (!errorMessage.isNullOrBlank()) {
+                Text(
+                    text = errorMessage,
+                    fontFamily = InterFontFamily,
+                    fontSize = 13.sp,
+                    color = Color(0xFFB42318),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
         }
 
         // Bottom sticky button

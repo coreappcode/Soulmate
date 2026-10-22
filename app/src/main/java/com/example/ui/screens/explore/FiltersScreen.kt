@@ -179,6 +179,12 @@ fun FiltersScreen(
                     inactiveTrackColor = ElevatedSurface
                 )
             )
+            Text(
+                text = "Exact distance filtering is unavailable because profiles do not currently store location coordinates.",
+                fontFamily = InterFontFamily,
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 

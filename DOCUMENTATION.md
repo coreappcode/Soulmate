@@ -5,8 +5,8 @@
 ## 1. Executive Summary & Architecture
 
 - **Application Name:** Soulmate
-- **Package Identifier:** `com.example`
-- **Application ID:** `com.aistudio.datingapp.rvyb`
+- **Kotlin Namespace:** `com.example`
+- **Android Application ID:** `com.soulmate.android`
 - **Architecture:** Single-Activity MVVM (Model-View-ViewModel) built 100% in Kotlin & Jetpack Compose
 - **Design System:** Custom Material Design 3 (M3) "Aurora Warm" Design System with Edge-to-Edge system insets
 - **Header & Navbar Theme:** Tinder-Model Iconic Pink (`#FD3A73`) for all Top App Bar headers and Bottom Navigation Bar tabs
@@ -14,6 +14,18 @@
   1. Jetpack Navigation Compose (`NavHost` / `NavController`) with slide + cross-fade page transitions for top-level routes (Splash, Landing, Onboarding, Dashboard, System fallback screens).
   2. In-Scaffold reactive sub-screen state machine (`ActiveSubScreen`) within `DashboardScreen` for instant tab switching, smooth child-screen transitions, and automatic back-stack popping via Jetpack `BackHandler`.
 - **State Management:** `SoulmateViewModel` driving Kotlin Coroutines `MutableStateFlow` and immutable reactive UI state representations
+
+### Firebase Backend Connections and Work Completed
+
+- **Firebase project:** `soulmate-e285e`; the Android app registered for this package is `com.soulmate.android`. Firebase configuration is checked in at the repository root and in `app/google-services.json`; both copies must remain synchronized.
+- **Authentication:** Firebase Phone Authentication sends and verifies SMS OTPs. The verified Firebase credential signs in the user; changing an existing account's phone number also requires OTP verification. Authentication errors are shown in the UI rather than replaced with a mock success state.
+- **Firestore:** `FirebaseRepository` is the app's data boundary. Private profile data and onboarding drafts are stored under `users/{uid}`; public discovery profiles under `profiles/{uid}`; normalized username claims under `usernames/{username}`; user preferences under `users/{uid}/settings`; blocks under `users/{uid}/blocks`. Swipes, matches, friend requests, friendships, conversations, and conversation messages use their corresponding top-level collections, with messages nested under each conversation.
+- **Profile privacy:** Public profiles omit age when the owner disables age visibility. Discovery, friend, profile, and chat displays use the privacy-aware age labels. The other privacy toggles are stored but are not enforced because online presence, distance visibility, non-friend messaging controls, and read receipts are not implemented.
+- **Firebase Storage:** Profile images are uploaded under `users/{uid}/profile/`, private selfie uploads under `users/{uid}/verification/`, and chat attachments under `conversations/{conversationId}/`. Uploads are initiated only after selection/capture through Android system pickers and camera contracts; profile images are cropped before upload.
+- **Backend deployment:** `firebase.json` points to `firestore.rules`, `firestore.indexes.json`, and `storage.rules`. Firestore rules and indexes and Storage rules were deployed to `soulmate-e285e` on October 22, 2026. Redeploy them whenever these checked-in deployment files change.
+- **Mock-flow cleanup:** Removed seeded mock data and simulated identity-verification completion. A captured selfie is stored privately and does not grant a verified badge. Billing, account deletion/deactivation, data export, live presence, precise-distance matching, push/email delivery, and moderation are not backed by configured services and are presented as unavailable or limited.
+- **Device integrations:** Onboarding uses actual Android runtime permission results. Photo selection uses the Android Photo Picker; camera capture uses the system camera with a FileProvider; profile cropping is performed before upload.
+- **Setup and validation notes:** Enable Phone sign-in in Firebase Authentication and register SHA-1/SHA-256 fingerprints for the app's signing certificates before production phone-auth testing. No signing fingerprints were registered during this work. An Android build could not be verified in the development environment because no Android SDK is configured.
 
 ---
 
@@ -190,7 +202,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 - **Navigations:**
   - Back Button → returns to `Routes.USERNAME`.
   - Empty Slot tap → navigates to `Routes.ADD_PHOTO`.
-  - "Choose from Gallery" button → launches real Android Photo Picker (`ActivityResultContracts.PickVisualMedia`).
+  - Empty slot → opens the photo source screen; selected photos are cropped and uploaded to Firebase Storage.
   - "Continue" (enabled when >= 2 photos) → navigates to `Routes.ABOUT_YOU`.
 - **Buttons:** `SoulOutlinedButton` ("Choose from Gallery"), `GradientButton` ("Continue"), Remove ("X") icon buttons.
 - **Icons:** `Icons.Default.Add`, `Icons.Default.PhotoLibrary`, `Icons.Default.Delete`, `Icons.Default.Star`.
@@ -198,46 +210,28 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 #### 10. Add Photo Screen
 - **Route:** `add_photo` (`Routes.ADD_PHOTO`)
 - **File:** `ui/screens/profile_setup/AddPhotoScreen.kt`
-- **Description:** Modal source chooser offering Gallery or Camera capture.
+- **Description:** Gallery or system-camera capture followed by a native 3:4 cropper and Firebase Storage upload.
 - **Navigations:**
   - Back Button → returns to `Routes.PHOTOS`.
   - "Choose from Gallery" card → launches real Android Photo Picker (`PickVisualMedia`).
-  - "Take Photo" card → launches device Camera (`TakePicturePreview`).
+  - "Take Photo" card → launches device Camera (`TakePicture`) using the app's FileProvider URI.
 - **Buttons:** Source cards (`PhotoSourceCard`).
 - **Icons:** `Icons.Default.PhotoLibrary`, `Icons.Default.CameraAlt`.
 
 #### 11. Face Capture Screen
 - **Route:** `face_capture` (`Routes.FACE_CAPTURE`)
 - **File:** `ui/screens/profile_setup/FaceCaptureScreen.kt`
-- **Description:** Selfie verification screen with face alignment oval guide. Directly integrates native Android camera (`TakePicturePreview`) to snap a live selfie, plus Android Photo Picker (`PickVisualMedia`) fallback.
+- **Description:** Selfie upload screen with camera and Android Photo Picker. A selfie is stored privately; it does not verify identity.
 - **Navigations:**
   - Back Button → returns to calling screen (`PhotosSetupScreen` or `DashboardProfile`).
   - "Take Selfie (Camera)" → launches native camera.
   - "Choose from Gallery" → launches real photo picker.
-  - "Use This" → updates `capturedSelfie` in ViewModel and navigates to `Routes.VERIFY_PROCESSING`.
+  - "Use This" → uploads the selfie to the user's private Firebase Storage folder.
   - "Retake" → resets photo capture prompt.
 - **Buttons:** `GradientButton` ("Take Selfie (Camera)"), `SoulOutlinedButton` ("Choose from Gallery"), `GradientButton` ("Use This"), `SoulOutlinedButton` ("Retake").
 - **Icons:** `Icons.Default.CameraAlt`, `Icons.Default.Person`, `Icons.AutoMirrored.Filled.ArrowBack`.
 
-#### 12. Verification Processing Screen
-- **Route:** `verify_processing` (`Routes.VERIFY_PROCESSING`)
-- **File:** `ui/screens/profile_setup/VerificationProcessingScreen.kt`
-- **Description:** Automated biometric analysis animation with 3 checklist items: Face Detected, Liveness Confirmed, Profile Match.
-- **Navigations:**
-  - Automatically transitions on completion to `Routes.VERIFY_SUCCESS`.
-- **Buttons:** None (automated pipeline).
-- **Icons:** `Icons.Default.Autorenew`, `Icons.Default.CheckCircle`.
-
-#### 13. Verification Success Screen
-- **Route:** `verify_success` (`Routes.VERIFY_SUCCESS`)
-- **File:** `ui/screens/profile_setup/VerificationSuccessScreen.kt`
-- **Description:** Celebration screen showcasing the blue verified checkmark badge.
-- **Navigations:**
-  - "Continue Setup" / "Go to Profile" → navigates to `Routes.DASHBOARD_PROFILE` or continues setup flow.
-- **Buttons:** `GradientButton` ("Continue").
-- **Icons:** `Icons.Default.Verified`, `Icons.Default.Check`.
-
-#### 14. About You Screen
+#### 12. About You Screen
 - **Route:** `about_you` (`Routes.ABOUT_YOU`)
 - **File:** `ui/screens/profile_setup/AboutYouScreen.kt`
 - **Description:** Step 4 of Onboarding. Bio input (up to 500 characters), interest chip selector (up to 10 interests), and single-selection "Who are you looking for? *" (Men, Women, Non-binary, All).
@@ -247,7 +241,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 - **Buttons:** Interest chips (`SoulChip`), `LookingForCard` selection cards, `GradientButton` ("Continue").
 - **Icons:** `Icons.Default.CheckCircle`, `Icons.AutoMirrored.Filled.ArrowBack`.
 
-#### 15. Permissions Screen
+#### 13. Permissions Screen
 - **Route:** `permissions` (`Routes.PERMISSIONS`)
 - **File:** `ui/screens/profile_setup/PermissionsScreen.kt`
 - **Description:** Final onboarding step requesting Location and Notification permissions via real Android Activity Result contracts (`RequestMultiplePermissions` for Location, `RequestPermission` for `POST_NOTIFICATIONS`).
@@ -255,7 +249,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
   - Back Button → returns to `Routes.ABOUT_YOU`.
   - Location Card tap → triggers native Android location permission dialog.
   - Notifications Card tap → triggers native Android notification permission dialog.
-  - "Enter Soulmate" / "Skip for now" → navigates to `Routes.DASHBOARD` (clearing entire onboarding backstack).
+  - "Enter Soulmate" / "Skip for now" → validates and saves the complete profile to Firebase before navigating to `Routes.DASHBOARD`.
 - **Buttons:** `PermissionCard` (Location), `PermissionCard` (Notifications), `GradientButton` ("Enter Soulmate"), TextButton ("Skip for now").
 - **Icons:** `Icons.Default.LocationOn`, `Icons.Default.Notifications`, `Icons.Default.Check`.
 
@@ -263,7 +257,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 
 ### Group 3: Main Dashboard Container
 
-#### 16. Dashboard Shell Screen
+#### 14. Dashboard Shell Screen
 - **Route:** `dashboard` (`Routes.DASHBOARD`)
 - **File:** `ui/screens/dashboard/DashboardScreen.kt`
 - **Description:** Main app container featuring a Tinder Pink (`#FD3A73`) bottom navigation bar hosting 5 primary tabs:
@@ -344,23 +338,12 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 - **Description:** Inbox with New Matches horizontal carousel and Conversation list showing last message, unread badges, and verified status.
 - **Top App Bar:** Tinder Pink (`#FD3A73`) background with white title "Chats" and new chat action icon.
 - **Navigations:**
-  - Tapping unverified match → opens `VerifyToUnlockScreen`.
-  - Tapping active conversation → opens `ChatThreadScreen`.
+  - Tapping a conversation → opens `ChatThreadScreen`.
   - Long press on conversation → opens `ChatOptionsScreen`.
 - **Buttons:** Match avatar circles, conversation card rows.
 - **Icons:** `Icons.Default.CheckCircle`, `Icons.Default.Lock`, `Icons.Default.Add`.
 
-#### 23. Verify To Unlock Screen
-- **Route:** `chat/verify_to_unlock` (`Routes.CHAT_VERIFY_TO_UNLOCK`)
-- **File:** `ui/screens/chats/VerifyToUnlockScreen.kt`
-- **Description:** Safety gate informing users that face verification is required before chatting with verified members.
-- **Navigations:**
-  - Back Button → returns to Chat List.
-  - "Verify Now" → navigates to `FaceCaptureScreen`.
-- **Buttons:** `GradientButton` ("Verify Now"), TextButton ("Maybe Later").
-- **Icons:** `Icons.Default.Shield`, `Icons.Default.Verified`.
-
-#### 24. Chat Thread Screen
+#### 23. Chat Thread Screen
 - **Route:** `chat/thread` (`Routes.CHAT_THREAD`)
 - **File:** `ui/screens/chats/ChatThreadScreen.kt`
 - **Description:** Real-time messaging screen with message bubbles, status ticks (sent, delivered, read), attachment button, and text field.
@@ -408,13 +391,14 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 #### 28. Send Attachment Screen
 - **Route:** `chat/attachment` (`Routes.CHAT_ATTACHMENT`)
 - **File:** `ui/screens/chats/SendAttachmentScreen.kt`
-- **Description:** Media attachment composer. Integrates real Android Photo Picker (`PickVisualMedia`) and real Camera capture (`TakePicturePreview`), provides preview with caption input, and attaches to conversation.
+- **Description:** Media attachment composer. Uses Android Photo Picker, system camera (`TakePicture`), audio picker, and document picker; attachments upload to Firebase Storage.
 - **Navigations:**
   - Back Button → returns to Chat Thread.
   - "Photo Gallery" → launches real Android Photo Picker (`PickVisualMedia`).
-  - "Take Instant Photo" → launches native device camera (`TakePicturePreview`).
-  - "Send Attachment" → appends image message to Chat Thread and pops back.
-- **Buttons:** `AttachmentOptionCard` (Gallery / Camera / Audio / Document), `GradientButton` ("Send Photo").
+  - "Take Instant Photo" → launches native device camera (`TakePicture`).
+  - Audio and Document options use Android system pickers.
+  - "Send Attachment" → uploads the selected file and saves the message to Firestore.
+- **Buttons:** `AttachmentOptionCard` (Gallery / Camera / Audio / Document), media-specific send button.
 - **Icons:** `Icons.Default.PhotoLibrary`, `Icons.Default.CameraAlt`, `Icons.Default.Headphones`, `Icons.Default.Description`, `Icons.AutoMirrored.Filled.Send`.
 
 ---
@@ -561,12 +545,10 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 #### 43. Delete Account Screen
 - **Route:** `settings/delete_account` (`Routes.SETTINGS_DELETE_ACCOUNT`)
 - **File:** `ui/screens/settings/DeleteAccountScreen.kt`
-- **Description:** Irreversible account deletion flow with reason selector and "DELETE" text confirmation input.
+- **Description:** States that account deletion is unavailable in this build; the screen does not modify or delete account data.
 - **Navigations:**
-  - "Keep My Account" → returns to Account Settings.
-  - "Permanently Delete" (enabled only when user types "DELETE") → wipes state and navigates to `Routes.LANDING`.
-- **Buttons:** Red Delete Button, `SoulOutlinedButton` ("Keep My Account").
-- **Icons:** `Icons.Default.DeleteForever`, `Icons.Default.Warning`.
+  - "Close" → returns to Account Settings.
+- **Buttons:** `SoulOutlinedButton` ("Close").
 
 #### 44. Phone Number Edit Screen
 - **Route:** `settings/phone` (`Routes.SETTINGS_PHONE`)
@@ -613,7 +595,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 #### 48. Edit Photos Screen
 - **Route:** `profile/edit_photos` (`Routes.PROFILE_EDIT_PHOTOS`)
 - **File:** `ui/screens/profile/EditPhotosScreen.kt`
-- **Description:** Manage 6 profile photos. Tapping empty slot launches real Android Photo Picker (`PickVisualMedia`). Tapping an existing photo sets it as Main. Includes built-in Photo Crop & Adjustment view.
+- **Description:** Manage up to six profile photos. Photo Picker selections use the Android 3:4 cropper before upload; existing photos can be reordered or removed.
 - **Navigations:**
   - Back Button / "Save Changes" → persists photo ordering in ViewModel and returns to My Profile.
   - Photo Picker → opens real system gallery via `PickVisualMedia`.
@@ -735,8 +717,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 ║                  ──► UsernameSearchScreen                                                 ║
 ║                                                                                           ║
 ║ 2. Chats Tab:                                                                             ║
-║    ChatListScreen ──► VerifyToUnlockScreen ──► FaceCaptureScreen                          ║
-║                   ──► ChatThreadScreen ──► ChatOptionsScreen                              ║
+║    ChatListScreen ──► ChatThreadScreen ──► ChatOptionsScreen                              ║
 ║                                        ──► ChatInfoScreen                                 ║
 ║                                        ──► SendAttachmentScreen (Real Media Picker/Camera)║
 ║                   ──► BlockedUsersScreen                                                  ║
@@ -758,7 +739,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 ║                                             ──► EditUsernameScreen                        ║
 ║                                             ──► EmailScreen                               ║
 ║                                             ──► LogoutConfirmationScreen ──► LandingScreen║
-║                                             ──► DeleteAccountScreen ───────► LandingScreen║
+║                   ──► DeleteAccountScreen (unavailable; no data is removed)              ║
 ║                                                                                           ║
 ║ 5. Profile Tab:                                                                           ║
 ║    MyProfileScreen ──► EditPhotosScreen (Real PhotoPicker & 3:4 Crop)                     ║
@@ -766,8 +747,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 ║                    ──► EditUsernameScreen                                                 ║
 ║                    ──► EditAboutScreen                                                    ║
 ║                    ──► PreviewProfileScreen                                               ║
-║                    ──► FaceCaptureScreen (Selfie Verification) ──► VerificationProcessing ║
-║                                                                ──► VerificationSuccess    ║
+║                    ──► FaceCaptureScreen (private selfie upload; not identity verification)║
 ╚═══════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -775,8 +755,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 
 ## 6. Real Android OS/SDK Implementations vs. External Services
 
-> **CRITICAL ARCHITECTURAL GUARANTEE — ZERO DUMMY MEDIA PICKERS:**
-> There are **NO dummy gallery image pickers or dummy camera pickers anywhere in this application**. Every screen where an image or photo can be selected or captured utilizes genuine Android Jetpack Activity Result contracts (`ActivityResultContracts.PickVisualMedia`, `ActivityResultContracts.TakePicturePreview`). Device storage, photo gallery, and hardware camera are directly interfaced with zero mock UI pickers.
+> **Media selection and capture use Android system contracts.** Profile photos are cropped before upload; media is persisted in Firebase Storage. A stored selfie does not count as identity verification.
 
 ### Real Android Integrations (Fully Implemented)
 
@@ -784,15 +763,15 @@ The application consists of **56 complete UI screens** organized into 9 logical 
    - **Where:** `AddPhotoScreen.kt`, `PhotosSetupScreen.kt`, `FaceCaptureScreen.kt`, `EditPhotosScreen.kt`, `SendAttachmentScreen.kt`.
    - **How it works:** Directly leverages the Android system photo picker via `rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia())`. Invokes the OS-level modal allowing users to select genuine photos from device storage, Google Photos, or cloud drives.
    - **Rendering:** Loaded via `coil.compose.AsyncImage` which natively supports `content://` and `file://` local URIs with automatic decoding, downsampling, and caching.
-2. **Camera Snap & Selfie Capture (`ActivityResultContracts.TakePicturePreview`):**
+2. **Camera Snap & Selfie Capture (`ActivityResultContracts.TakePicture`):**
    - **Where:** `AddPhotoScreen.kt`, `FaceCaptureScreen.kt`, `SendAttachmentScreen.kt`.
-   - **How it works:** Launches the native device camera activity, captures a real hardware bitmap, compresses it as JPEG into `context.cacheDir`, and returns a persistent local file URI.
+   - **How it works:** Launches the Android camera app with a FileProvider URI; the captured image is cropped where applicable and uploaded to Firebase Storage.
 3. **Android Runtime OS Permissions (`ActivityResultContracts.RequestMultiplePermissions` & `RequestPermission`):**
    - **Where:** `PermissionsScreen.kt`, declared in `AndroidManifest.xml`.
    - **How it works:** Tapping the Location or Notifications card triggers the genuine Android system permission dialog (`ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, and `POST_NOTIFICATIONS` on Android 13+).
-4. **Interactive 3:4 Profile Photo Cropping (`EditPhotosScreen.kt`):**
-   - **Where:** `EditPhotosScreen.kt` (`PhotoCropAdjustmentView`).
-   - **How it works:** Dedicated 3:4 aspect-ratio framing view with dedicated "Crop" button on every profile photo slot, allowing users to reframe and preview cropped portraits.
+4. **Interactive 3:4 Profile Photo Cropping (CanHub Android Image Cropper):**
+   - **Where:** `AddPhotoScreen.kt` and `EditPhotosScreen.kt`.
+   - **How it works:** The Android cropper returns a real cropped JPEG URI before profile-photo upload.
 5. **Native Android Date Picker (`android.app.DatePickerDialog`):**
    - **Where:** `BasicInfoScreen.kt`, `DatePickerScreen.kt`.
    - **How it works:** Launches the native Android OS DatePickerDialog attached to the host activity context, with age calculation and 18+ validation.
@@ -807,20 +786,22 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 
 ### Client-Side State vs. External Server Dependencies
 
-The app is built as a complete, fully functional self-contained client. Below is the exact technical reality regarding external cloud/server dependencies:
+The app uses Firebase Authentication, Cloud Firestore, and Firebase Storage for account and app data. The project is `soulmate-e285e`; the Firestore database and Storage bucket are in `asia-south1`. Firestore rules/indexes and Storage rules were deployed on October 22, 2026. Re-deploy after changes to the checked-in rules or indexes and before releasing.
 
 | Feature / UI Component | Screen(s) Involved | Current Implementation (Client-Side Behavior) | External Infrastructure Requirement |
 | :--- | :--- | :--- | :--- |
-| **Media Picking & Camera** | All photo screens | **100% Real Android SDK** (`PickVisualMedia` + `TakePicturePreview`). | None required (uses native OS). |
+| **Media Picking, Cropping & Camera** | Profile, selfie, and chat attachment screens | Android Photo Picker, `TakePicture`, CanHub cropper, and Firebase Storage uploads. | Storage rules are deployed; re-deploy after rule changes. |
 | **OS System Permissions** | `PermissionsScreen.kt` | **100% Real Android SDK** (`RequestMultiplePermissions`). | None required (uses native OS). |
 | **Date Selection** | `BasicInfoScreen.kt` | **100% Real Android SDK** (`DatePickerDialog`). | None required (uses native OS). |
 | **SMS OTP Verification** | `PhoneEntryScreen.kt`, `OtpVerifyScreen.kt`, `PhoneNumberScreen.kt` | Firebase Phone Auth sends/resends the SMS, signs the user in with the verified credential, and updates an existing account phone only after OTP verification. | Enable Phone sign-in in Firebase Authentication; register the app's SHA-1/SHA-256 fingerprints in Firebase for app verification. Firebase test phone numbers can be used during development. |
-| **Verification Analysis Pipeline** | `VerificationProcessingScreen.kt` | 3-step automated biometric analysis animation (Face Detected, Liveness Confirmed, Profile Match) that transitions to verified state. | Cloud server biometrics endpoint or on-device ML Kit Face Mesh detection. |
-| **Peer-to-Peer Chat Sync** | `ChatThreadScreen.kt` | Real-time interactive message sending, typing status, and photo attachments stored in ViewModel reactive state. | Cloud WebSocket server or Firebase Firestore for remote two-way peer synchronization. |
-| **Matchmaking Swipe Deck** | `ExploreScreen.kt` | Interactive swipe physics with swipe-left (pass), swipe-right (like), superlike, filter controls, and match celebration. | Remote database (Firebase Firestore / Cloud SQL) with geospatial coordinates. |
-| **In-App Billing** | `ProPlansScreen.kt` | Interactive plan selector (1 Month / 6 Months / 12 Months) updating user's Gold tier status immediately in state. | Google Play Billing Library (`com.android.billingclient:billing`) and Google Play Console merchant account. |
+| **Profile and username claims** | Onboarding and profile screens | Draft/private data and public profiles are stored in Firestore; username claims are transactional. | Firestore rules and indexes are deployed; re-deploy after changes. |
+| **Peer-to-peer chat** | `ChatThreadScreen.kt`, `SendAttachmentScreen.kt` | Messages and conversations use Firestore; supported attachments upload to Storage. | Firestore/Storage rules and indexes are deployed; re-deploy after changes. |
+| **Friends and matchmaking** | Explore and Friends screens | Swipes, matches, friend requests, friendships, blocks, and settings use Firestore. | Location-distance ranking, live presence, and moderation are not configured. |
+| **Identity verification** | `FaceCaptureScreen.kt`, `VerificationStatusScreen.kt` | A selfie can be stored privately; the UI never marks it verified. | A real identity-review provider is not configured. |
+| **In-App Billing** | `ProPlansScreen.kt` | Purchases and restore are explicitly unavailable; no subscription is activated. | Google Play Billing and Play Console products are not configured. |
+| **Account deletion** | `DeleteAccountScreen.kt` | The screen states that deletion is unavailable and makes no account changes. | A secure deletion backend is not configured. |
 
-Before testing SMS sign-in, enable **Phone** under Firebase Console → Authentication → Sign-in method, and add the app's SHA-1 and SHA-256 signing-certificate fingerprints to the Android app registration. The Android Firebase config must be available as `app/google-services.json`. Use Firebase Authentication test phone numbers during development to avoid sending real SMS messages.
+Before testing SMS sign-in, confirm **Phone** is enabled under Firebase Console → Authentication → Sign-in method, and add the app's SHA-1 and SHA-256 signing-certificate fingerprints to the Android app registration. These fingerprints were not registered during this work. The Android Firebase config must be available as `app/google-services.json`. Use Firebase Authentication test phone numbers during development to avoid sending real SMS messages.
 
 ---
 

@@ -47,7 +47,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -68,10 +67,7 @@ import com.example.ui.theme.RosePrimary
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
+import com.example.utils.createCameraCaptureUri
 
 @Composable
 fun FaceCaptureScreen(
@@ -81,23 +77,18 @@ fun FaceCaptureScreen(
     val context = LocalContext.current
     var isCapturing by remember { mutableStateOf(false) }
     var capturedPhotoUrl by remember { mutableStateOf<String?>(null) }
-    val coroutineScope = rememberCoroutineScope()
+    var photoError by remember { mutableStateOf<String?>(null) }
+    var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
 
     // Real Camera Selfie capture launcher
     val takePictureLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap: Bitmap? ->
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
         isCapturing = false
-        if (bitmap != null) {
-            try {
-                val photoFile = File(context.cacheDir, "selfie_face_${System.currentTimeMillis()}.jpg")
-                FileOutputStream(photoFile).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
-                }
-                capturedPhotoUrl = photoFile.toURI().toString()
-            } catch (e: Exception) {
-                // Ignore failure
-            }
+        if (success && cameraCaptureUri != null) {
+            capturedPhotoUrl = cameraCaptureUri.toString()
+        } else {
+            photoError = "The camera did not capture a selfie. Please try again."
         }
     }
 
@@ -140,7 +131,7 @@ fun FaceCaptureScreen(
             }
 
             Text(
-                text = "Face Verification",
+                text = "Upload a Selfie",
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 17.sp,
@@ -158,7 +149,7 @@ fun FaceCaptureScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Verify your face",
+                text = "Add a profile selfie",
                 style = H2Style,
                 textAlign = TextAlign.Center
             )
@@ -166,7 +157,7 @@ fun FaceCaptureScreen(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Take a clear selfie. We'll match it with your gender.",
+                text = "You can store a selfie with your profile. This app does not currently verify identity.",
                 fontFamily = InterFontFamily,
                 fontSize = 14.sp,
                 color = TextSecondary,
@@ -202,7 +193,7 @@ fun FaceCaptureScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Analyzing frame...",
+                            text = "Opening camera...",
                             fontFamily = InterFontFamily,
                             fontSize = 13.sp,
                             color = TextSecondary
@@ -234,12 +225,25 @@ fun FaceCaptureScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = if (capturedPhotoUrl != null) "Selfie captured successfully!" else "Center your face in the circle",
+                text = if (capturedPhotoUrl != null) {
+                    "Selfie selected. It will not mark your profile as verified."
+                } else {
+                    "Choose a clear profile selfie"
+                },
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 color = if (capturedPhotoUrl != null) OrchidPrimary else TextSecondary
             )
+            if (!photoError.isNullOrBlank()) {
+                Text(
+                    text = photoError.orEmpty(),
+                    color = RosePrimary,
+                    fontFamily = InterFontFamily,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
 
             Spacer(modifier = Modifier.weight(1f))
         }
@@ -259,7 +263,10 @@ fun FaceCaptureScreen(
                         text = "Take Selfie (Camera)",
                         onClick = {
                             isCapturing = true
-                            takePictureLauncher.launch(null)
+                            photoError = null
+                            val uri = context.createCameraCaptureUri("selfie")
+                            cameraCaptureUri = uri
+                            takePictureLauncher.launch(uri)
                         },
                         loading = isCapturing,
                         modifier = Modifier.fillMaxWidth().testTag("take_selfie_button")
@@ -269,6 +276,7 @@ fun FaceCaptureScreen(
                         text = "Choose from Gallery",
                         onClick = {
                             isCapturing = true
+                            photoError = null
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )

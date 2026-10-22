@@ -1,10 +1,12 @@
 package com.example.ui.screens.profile
 
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,7 +50,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -74,34 +75,49 @@ fun EditPhotosScreen(
     onRemovePhoto: (Int) -> Unit,
     onSetMainPhoto: (Int) -> Unit,
     onSave: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isUploading: Boolean = false,
+    errorMessage: String? = null
 ) {
-    val context = LocalContext.current
-    var pendingCropModel by remember { mutableStateOf<String?>(null) }
+    var cropError by remember { mutableStateOf<String?>(null) }
 
-    // Real Android Photo Picker launcher
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            pendingCropModel = uri.toString()
+    val cropImageLauncher = rememberLauncherForActivityResult(
+        contract = CropImageContract()
+    ) { result ->
+        if (result.isSuccessful) {
+            result.uriContent?.let { croppedUri ->
+                if (photos.size < 6) {
+                    onAddPhoto(croppedUri.toString())
+                    cropError = null
+                } else {
+                    cropError = "A profile can contain at most six photos."
+                }
+            } ?: run {
+                cropError = "The cropper did not return an image. Please try again."
+            }
+        } else if (result.error != null) {
+            cropError = result.error?.localizedMessage ?: "Unable to crop this photo."
         }
     }
 
-    if (pendingCropModel != null) {
-        // Android photo crop / adjustment view
-        PhotoCropAdjustmentView(
-            imageModel = pendingCropModel!!,
-            onCancel = { pendingCropModel = null },
-            onConfirm = { croppedUriString ->
-                if (!photos.contains(croppedUriString)) {
-                    onAddPhoto(croppedUriString)
-                }
-                pendingCropModel = null
-                Toast.makeText(context, "Photo updated in your profile!", Toast.LENGTH_SHORT).show()
-            }
+    fun cropPhoto(uri: Uri) {
+        cropImageLauncher.launch(
+            CropImageContractOptions(
+                uri = uri,
+                cropImageOptions = CropImageOptions(
+                    fixAspectRatio = true,
+                    aspectRatioX = 3,
+                    aspectRatioY = 4,
+                    outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG
+                )
+            )
         )
-        return
+    }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) cropPhoto(uri)
     }
 
     Column(
@@ -137,6 +153,20 @@ fun EditPhotosScreen(
                 color = TextSecondary,
                 lineHeight = 18.sp
             )
+
+            if (isUploading || !errorMessage.isNullOrBlank() || !cropError.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = when {
+                        isUploading -> "Uploading photo..."
+                        !cropError.isNullOrBlank() -> cropError.orEmpty()
+                        else -> errorMessage.orEmpty()
+                    },
+                    fontFamily = InterFontFamily,
+                    fontSize = 13.sp,
+                    color = if (isUploading) TextSecondary else RosePrimary
+                )
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -317,7 +347,8 @@ fun EditPhotosScreen(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = photos.size < 6 && !isUploading
             )
         }
 
@@ -332,117 +363,10 @@ fun EditPhotosScreen(
             GradientButton(
                 text = "Done Editing",
                 onClick = onSave,
+                enabled = !isUploading,
+                loading = isUploading,
                 modifier = Modifier.fillMaxWidth()
             )
-        }
-    }
-}
-
-@Composable
-private fun PhotoCropAdjustmentView(
-    imageModel: String,
-    onCancel: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppBackground)
-            .testTag("photo_crop_view")
-    ) {
-        SoulTopBar(
-            title = "Crop & Adjust",
-            showBack = true,
-            onBackClick = onCancel
-        )
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "Adjust photo framing for your 3:4 profile card",
-                fontFamily = InterFontFamily,
-                fontSize = 13.sp,
-                color = TextSecondary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 3:4 aspect ratio crop frame
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .aspectRatio(3f / 4f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .border(2.5.dp, OrchidPrimary, RoundedCornerShape(20.dp))
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = imageModel,
-                    contentDescription = "Crop Preview",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Crop grid lines
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .border(1.dp, Color.White.copy(alpha = 0.35f))
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Crop,
-                    contentDescription = null,
-                    tint = OrchidPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "3:4 Aspect Ratio Locked",
-                    fontFamily = PoppinsFontFamily,
-                    fontSize = 12.sp,
-                    color = TextPrimary
-                )
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(AppBackground)
-                .border(width = 1.dp, color = HairlineDivider)
-                .padding(horizontal = 20.dp, vertical = 14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                SoulOutlinedButton(
-                    text = "Cancel",
-                    onClick = onCancel,
-                    modifier = Modifier.weight(1f)
-                )
-
-                GradientButton(
-                    text = "Confirm Photo",
-                    onClick = { onConfirm(imageModel) },
-                    modifier = Modifier.weight(1.3f)
-                )
-            }
         }
     }
 }

@@ -147,7 +147,7 @@ fun ItsAMatchScreen(
             ) {
                 // User 1 avatar (My photo)
                 AsyncImage(
-                    model = myPhotoUrl.ifBlank { "https://picsum.photos/seed/self1/600/800" },
+                    model = myPhotoUrl,
                     contentDescription = "My Photo",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

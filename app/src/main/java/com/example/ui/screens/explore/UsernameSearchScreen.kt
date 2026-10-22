@@ -1,6 +1,5 @@
 package com.example.ui.screens.explore
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.MockData
 import com.example.data.User
 import com.example.ui.components.SoulAvatar
 import com.example.ui.components.SoulSearchBar
@@ -57,32 +55,26 @@ import com.example.ui.theme.PillShape
 import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import kotlinx.coroutines.delay
 
 @Composable
 fun UsernameSearchScreen(
+    results: List<User>,
+    sentRequestIds: Set<String>,
+    onSearchQuery: (String) -> Unit,
     onUserClick: (User) -> Unit,
     onAddFriend: (User) -> Unit,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
     var query by remember { mutableStateOf("") }
     var debouncedQuery by remember { mutableStateOf("") }
-    var addedUsers by remember { mutableStateOf(setOf<String>()) }
 
     // Debounced 400ms filter
     LaunchedEffect(query) {
-        delay(400)
+        kotlinx.coroutines.delay(400)
         debouncedQuery = query
     }
-
-    val results = if (debouncedQuery.isBlank()) {
-        MockData.users.take(8)
-    } else {
-        MockData.users.filter {
-            it.username.contains(debouncedQuery, ignoreCase = true) ||
-                it.name.contains(debouncedQuery, ignoreCase = true)
-        }
+    LaunchedEffect(debouncedQuery) {
+        onSearchQuery(debouncedQuery)
     }
 
     Column(
@@ -138,7 +130,7 @@ fun UsernameSearchScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "No soulmates found",
+                    text = if (query.isBlank()) "Search people by username" else "No soulmates found",
                     fontFamily = PoppinsFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
@@ -148,7 +140,11 @@ fun UsernameSearchScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "We couldn't find anyone matching \"$query\". Check spelling or try searching a different handle.",
+                    text = if (query.isBlank()) {
+                        "Enter a username or name to search real profiles."
+                    } else {
+                        "We couldn't find anyone matching \"$query\". Check spelling or try a different handle."
+                    },
                     fontFamily = InterFontFamily,
                     fontSize = 13.sp,
                     color = TextSecondary,
@@ -163,7 +159,7 @@ fun UsernameSearchScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(results, key = { it.id }) { user ->
-                    val isAdded = addedUsers.contains(user.id)
+                    val isAdded = user.id in sentRequestIds
                     Card(
                         shape = RoundedCornerShape(18.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -216,9 +212,7 @@ fun UsernameSearchScreen(
                                             Modifier
                                                 .background(AuroraHorizontalGradient)
                                                 .clickable {
-                                                    addedUsers = addedUsers + user.id
                                                     onAddFriend(user)
-                                                    Toast.makeText(context, "Added ${user.name}!", Toast.LENGTH_SHORT).show()
                                                 }
                                                 .padding(horizontal = 14.dp, vertical = 7.dp)
                                         }

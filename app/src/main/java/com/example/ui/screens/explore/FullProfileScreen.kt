@@ -80,7 +80,7 @@ fun FullProfileScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    val photos = if (user.photos.isNotEmpty()) user.photos else listOf("https://picsum.photos/seed/default/600/800")
+    val photos = user.photos
     val pagerState = rememberPagerState(pageCount = { photos.size })
 
     Box(
@@ -103,16 +103,30 @@ fun FullProfileScreen(
                     .fillMaxWidth()
                     .aspectRatio(3f / 4f)
             ) {
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize()
-                ) { page ->
-                    AsyncImage(
-                        model = photos[page],
-                        contentDescription = "Photo $page",
-                        contentScale = ContentScale.Crop,
+                if (photos.isNotEmpty()) {
+                    HorizontalPager(
+                        state = pagerState,
                         modifier = Modifier.fillMaxSize()
-                    )
+                    ) { page ->
+                        AsyncImage(
+                            model = photos[page],
+                            contentDescription = "Photo $page",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(ElevatedSurface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No profile photos",
+                            color = TextSecondary
+                        )
+                    }
                 }
 
                 // Blurred top controls
@@ -184,7 +198,7 @@ fun FullProfileScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${user.name}, ${user.age}",
+                            text = user.nameWithAge,
                             fontFamily = PoppinsFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 26.sp,
