@@ -418,7 +418,7 @@ class FirebaseRepository(
             .collection("messages").get().await().documents
         messages.chunked(450).forEach { chunk ->
             firestore.batch().also { batch ->
-                chunk.forEach(batch::delete)
+                chunk.forEach { message -> batch.delete(message.reference) }
                 batch.commit().await()
             }
         }

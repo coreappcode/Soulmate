@@ -1,6 +1,7 @@
 package com.example.ui.screens.profile
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.utils.createCameraCaptureUri
 import com.example.ui.components.GradientButton
 import com.example.ui.components.SoulOutlinedButton
 import com.example.ui.components.SoulTopBar
@@ -67,11 +70,16 @@ import com.example.ui.theme.RosePrimary
 import com.example.ui.theme.SemanticOnline
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import java.io.IOException
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun EditPhotosScreen(
     photos: List<String>,
     onAddPhoto: (String) -> Unit,
+    onReplacePhoto: (Int, String) -> Unit,
     onRemovePhoto: (Int) -> Unit,
     onSetMainPhoto: (Int) -> Unit,
     onSave: () -> Unit,
@@ -80,13 +88,22 @@ fun EditPhotosScreen(
     errorMessage: String? = null
 ) {
     var cropError by remember { mutableStateOf<String?>(null) }
+    var replacementIndex by remember { mutableStateOf<Int?>(null) }
+    var photoToCrop by remember { mutableStateOf<Pair<Int, String>?>(null) }
+    var stagedCropUri by remember { mutableStateOf<Uri?>(null) }
+    val context = LocalContext.current
 
     val cropImageLauncher = rememberLauncherForActivityResult(
         contract = CropImageContract()
     ) { result ->
         if (result.isSuccessful) {
             result.uriContent?.let { croppedUri ->
-                if (photos.size < 6) {
+                val photoIndex = replacementIndex
+                if (photoIndex != null) {
+                    onReplacePhoto(photoIndex, croppedUri.toString())
+                    replacementIndex = null
+                    cropError = null
+                } else if (photos.size < 6) {
                     onAddPhoto(croppedUri.toString())
                     cropError = null
                 } else {
@@ -98,6 +115,8 @@ fun EditPhotosScreen(
         } else if (result.error != null) {
             cropError = result.error?.localizedMessage ?: "Unable to crop this photo."
         }
+        stagedCropUri?.let { context.contentResolver.delete(it, null, null) }
+        stagedCropUri = null
     }
 
     fun cropPhoto(uri: Uri) {
@@ -117,7 +136,44 @@ fun EditPhotosScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
-        if (uri != null) cropPhoto(uri)
+        if (uri != null) {
+            replacementIndex = null
+            cropPhoto(uri)
+        }
+    }
+
+    LaunchedEffect(photoToCrop) {
+        val (index, photoUrl) = photoToCrop ?: return@LaunchedEffect
+        try {
+            val sourceUri = Uri.parse(photoUrl)
+            val cropUri = if (sourceUri.scheme == "https") {
+                val localUri = context.createCameraCaptureUri("profile_crop")
+                withContext(Dispatchers.IO) {
+                    val connection = URL(photoUrl).openConnection().apply {
+                        connectTimeout = 15_000
+                        readTimeout = 30_000
+                    }
+                    connection.getInputStream().use { input ->
+                        val output = context.contentResolver.openOutputStream(localUri)
+                            ?: throw IOException("Unable to prepare this photo for cropping.")
+                        output.use { input.copyTo(it) }
+                    }
+                }
+                stagedCropUri = localUri
+                localUri
+            } else if (sourceUri.scheme == "content" || sourceUri.scheme == "file") {
+                sourceUri
+            } else {
+                throw IOException("This photo cannot be cropped from its current location.")
+            }
+            replacementIndex = index
+            cropPhoto(cropUri)
+        } catch (exception: Exception) {
+            cropError = exception.localizedMessage ?: "Unable to prepare this photo for cropping."
+            replacementIndex = null
+        } finally {
+            photoToCrop = null
+        }
     }
 
     Column(
@@ -265,7 +321,7 @@ fun EditPhotosScreen(
                                     .size(26.dp)
                                     .clip(CircleShape)
                                     .background(Color(0xCC1A1423))
-                                    .clickable { pendingCropModel = photoUrl }
+                                    .clickable { photoToCrop = index to photoUrl }
                                     .testTag("crop_photo_$index"),
                                 contentAlignment = Alignment.Center
                             ) {

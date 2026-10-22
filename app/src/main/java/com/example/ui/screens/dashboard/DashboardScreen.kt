@@ -548,6 +548,7 @@ fun DashboardScreen(
                     EditPhotosScreen(
                         photos = userProfile.photos,
                         onAddPhoto = { viewModel.addPhoto(it) },
+                        onReplacePhoto = { index, uri -> viewModel.replacePhoto(index, uri) },
                         onRemovePhoto = { viewModel.removePhoto(it) },
                         onSetMainPhoto = { viewModel.setMainPhoto(it) },
                         onSave = { activeSubScreen = ActiveSubScreen.None },

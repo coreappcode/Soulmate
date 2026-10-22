@@ -48,6 +48,7 @@ import com.example.ui.theme.BrandShadowColor
 import com.example.ui.theme.CardBackground
 import com.example.ui.theme.CardShape
 import com.example.ui.theme.ElevatedSurface
+import com.example.ui.theme.HairlineDivider
 import com.example.ui.theme.InterFontFamily
 import com.example.ui.theme.OrchidPrimary
 import com.example.ui.theme.PillShape

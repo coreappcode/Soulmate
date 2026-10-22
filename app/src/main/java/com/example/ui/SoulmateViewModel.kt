@@ -160,59 +160,59 @@ class SoulmateViewModel : ViewModel() {
             loadedUid = user.uid
             loadSignedInData(user.uid)
         }
+    }
 
-        private fun applyCurrentFilters() {
-            val profile = _uiState.value
-            val filters = _filterState.value
-            val matchmaking = _matchmaking.value
-            val blockedIds = _blockedUsers.value.map { it.id }.toSet()
-            val nearbyCountry = profile.selectedCountry.name
-            val nearbyCity = profile.city.trim()
-            val viewerGender = profile.gender
+    private fun applyCurrentFilters() {
+        val profile = _uiState.value
+        val filters = _filterState.value
+        val matchmaking = _matchmaking.value
+        val blockedIds = _blockedUsers.value.map { it.id }.toSet()
+        val nearbyCountry = profile.selectedCountry.name
+        val nearbyCity = profile.city.trim()
+        val viewerGender = profile.gender
 
-            _exploreDeck.value = _availableProfiles.value.filter { user ->
-                val sameCountry = user.country.equals(nearbyCountry, ignoreCase = true)
-                val sameCity = nearbyCity.isNotBlank() &&
-                    user.city.equals(nearbyCity, ignoreCase = true)
-                val segmentMatches = when (_exploreSegment.value) {
-                    0 -> if (nearbyCity.isNotBlank()) sameCity else sameCountry
-                    1 -> sameCountry
-                    else -> true
-                }
-                val matchmakingMatches = matchmaking.globalToggle ||
-                    !matchmaking.countryToggle || sameCountry
-                val viewerLooksForUser = profile.selectedLookingFor.isEmpty() ||
-                    profile.selectedLookingFor.any { matchesGender(it, user.gender) }
-                val userLooksForViewer = user.lookingFor.isEmpty() ||
-                    user.lookingFor.any { matchesGender(it, viewerGender) }
+        _exploreDeck.value = _availableProfiles.value.filter { user ->
+            val sameCountry = user.country.equals(nearbyCountry, ignoreCase = true)
+            val sameCity = nearbyCity.isNotBlank() &&
+                user.city.equals(nearbyCity, ignoreCase = true)
+            val segmentMatches = when (_exploreSegment.value) {
+                0 -> if (nearbyCity.isNotBlank()) sameCity else sameCountry
+                1 -> sameCountry
+                else -> true
+            }
+            val matchmakingMatches = matchmaking.globalToggle ||
+                !matchmaking.countryToggle || sameCountry
+            val viewerLooksForUser = profile.selectedLookingFor.isEmpty() ||
+                profile.selectedLookingFor.any { matchesGender(it, user.gender) }
+            val userLooksForViewer = user.lookingFor.isEmpty() ||
+                user.lookingFor.any { matchesGender(it, viewerGender) }
 
-                user.id !in blockedIds &&
-                    (!user.ageVisible ||
-                        (user.age.toFloat() in filters.ageRange &&
-                            user.age.toFloat() in matchmaking.ageRange)) &&
-                    matchesGender(filters.interestedIn, user.gender) &&
-                    matchesGender(matchmaking.showMe, user.gender) &&
-                    (filters.selectedInterests.isEmpty() ||
-                        user.interests.any { interest ->
-                            filters.selectedInterests.any { it.equals(interest, ignoreCase = true) }
-                        }) &&
+            user.id !in blockedIds &&
+                (!user.ageVisible ||
+                    (user.age.toFloat() in filters.ageRange &&
+                        user.age.toFloat() in matchmaking.ageRange)) &&
+                matchesGender(filters.interestedIn, user.gender) &&
+                matchesGender(matchmaking.showMe, user.gender) &&
+                (filters.selectedInterests.isEmpty() ||
+                    user.interests.any { interest ->
+                        filters.selectedInterests.any { it.equals(interest, ignoreCase = true) }
+                    }) &&
                 viewerLooksForUser &&
                 userLooksForViewer &&
-                    (!filters.onlineOnly || user.isOnline) &&
-                    (!filters.verifiedOnly || user.verified) &&
-                    segmentMatches &&
-                    matchmakingMatches
-            }
+                (!filters.onlineOnly || user.isOnline) &&
+                (!filters.verifiedOnly || user.verified) &&
+                segmentMatches &&
+                matchmakingMatches
         }
+    }
 
-        private fun matchesGender(preference: String, gender: String): Boolean {
-            if (preference == "All" || preference == "Everyone") return true
-            val normalized = gender.trim().lowercase(Locale.ROOT)
-            return when (preference.lowercase(Locale.ROOT)) {
-                "women", "woman" -> normalized in setOf("woman", "women", "female")
-                "men", "man" -> normalized in setOf("man", "men", "male")
-                else -> normalized == preference.trim().lowercase(Locale.ROOT)
-            }
+    private fun matchesGender(preference: String, gender: String): Boolean {
+        if (preference == "All" || preference == "Everyone") return true
+        val normalized = gender.trim().lowercase(Locale.ROOT)
+        return when (preference.lowercase(Locale.ROOT)) {
+            "women", "woman" -> normalized in setOf("woman", "women", "female")
+            "men", "man" -> normalized in setOf("man", "men", "male")
+            else -> normalized == preference.trim().lowercase(Locale.ROOT)
         }
     }
 
@@ -689,6 +689,52 @@ class SoulmateViewModel : ViewModel() {
                     )
                 }
                 scheduleProfilePersistence()
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            }
+        }
+    }
+
+    fun replacePhoto(index: Int, uriString: String) {
+        val originalPhoto = _uiState.value.photos.getOrNull(index) ?: return
+        if (_uiState.value.isUploadingPhoto) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploadingPhoto = true, dataError = null) }
+            var uploadedPhoto: String? = null
+            try {
+                uploadedPhoto = repository.uploadProfilePhoto(Uri.parse(uriString))
+                val latestProfile = _uiState.value
+                val photos = latestProfile.photos.toMutableList()
+                if (index !in photos.indices) {
+                    throw IllegalStateException("The selected photo is no longer available.")
+                }
+                photos[index] = uploadedPhoto
+                val updatedProfile = latestProfile.copy(
+                    photos = photos,
+                    isUploadingPhoto = false
+                )
+                if (updatedProfile.isOnboardingComplete) {
+                    repository.saveProfile(updatedProfile, complete = true)
+                } else {
+                    repository.saveDraft(updatedProfile)
+                }
+                _uiState.value = updatedProfile
+            } catch (exception: Exception) {
+                uploadedPhoto?.let { photoUrl ->
+                    try {
+                        repository.deleteProfilePhoto(photoUrl)
+                    } catch (cleanupException: Exception) {
+                        reportDataError(cleanupException)
+                    }
+                }
+                _uiState.update { it.copy(isUploadingPhoto = false) }
+                reportDataError(exception)
+                return@launch
+            }
+
+            try {
+                repository.deleteProfilePhoto(originalPhoto)
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
