@@ -13,11 +13,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.soulmate.android"
+    applicationId = "com.soulmate.androidapp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -26,14 +26,15 @@ android {
   // and updating Android apps in AI Studio.
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/soulmate-release.jks"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      storePassword = System.getenv("STORE_PASSWORD") ?: "soulmatepassword"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "soulmate"
+      keyPassword = System.getenv("KEY_PASSWORD") ?: "soulmatepassword"
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
+      val localKeystore = file("${rootDir}/debug.keystore")
+      storeFile = if (localKeystore.exists()) localKeystore else file("${System.getProperty("user.home")}/.android/debug.keystore")
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
@@ -117,6 +118,9 @@ dependencies {
   implementation(libs.firebase.auth)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.storage)
+  implementation(libs.firebase.messaging)
+  implementation(libs.firebase.appcheck.playintegrity)
+  implementation(libs.play.services.integrity)
   implementation(libs.kotlinx.coroutines.play.services)
   // Uncomment the following dependencies together to use Google Sign-In via Credential Manager:
   // implementation(libs.androidx.credentials)
