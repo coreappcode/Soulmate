@@ -25,11 +25,17 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RemoveCircleOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +70,8 @@ fun ChatOptionsScreen(
     onDeleteChat: () -> Unit,
     onBack: () -> Unit
 ) {
+    var pendingDestructiveAction by remember { mutableStateOf<String?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -101,11 +109,15 @@ fun ChatOptionsScreen(
                 Column {
                     OptionRow(icon = Icons.Default.Person, title = "View Profile", onClick = onViewProfile)
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
-                    OptionRow(icon = Icons.Default.Folder, title = "Media & Files", onClick = onMediaAndFiles)
+                    OptionRow(icon = Icons.Default.Folder, title = "Chat Info", onClick = onMediaAndFiles)
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
                     OptionRow(icon = Icons.Default.NotificationsOff, title = "Mute Notifications", onClick = onMute)
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
-                    OptionRow(icon = Icons.Default.RemoveCircleOutline, title = "Clear Chat History", onClick = onClearChat)
+                    OptionRow(
+                        icon = Icons.Default.RemoveCircleOutline,
+                        title = "Clear Chat History",
+                        onClick = { pendingDestructiveAction = "clear" }
+                    )
                 }
             }
 
@@ -124,10 +136,48 @@ fun ChatOptionsScreen(
                     HorizontalDivider(color = Color(0xFFFCA5A5), modifier = Modifier.padding(horizontal = 16.dp))
                     OptionRow(icon = Icons.Default.Flag, title = "Report User", isDanger = true, onClick = onReportUser)
                     HorizontalDivider(color = Color(0xFFFCA5A5), modifier = Modifier.padding(horizontal = 16.dp))
-                    OptionRow(icon = Icons.Default.Delete, title = "Delete Chat", isDanger = true, onClick = onDeleteChat)
+                    OptionRow(
+                        icon = Icons.Default.Delete,
+                        title = "Delete Chat",
+                        isDanger = true,
+                        onClick = { pendingDestructiveAction = "delete" }
+                    )
                 }
             }
         }
+    }
+    pendingDestructiveAction?.let { action ->
+        val isClearAction = action == "clear"
+        AlertDialog(
+            onDismissRequest = { pendingDestructiveAction = null },
+            title = {
+                Text(if (isClearAction) "Clear chat history?" else "Delete chat?")
+            },
+            text = {
+                Text(
+                    if (isClearAction) {
+                        "This clears messages from your view only. The other participant's history is unchanged."
+                    } else {
+                        "This removes the chat from your conversation list. The other participant's history is unchanged."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDestructiveAction = null
+                        if (isClearAction) onClearChat() else onDeleteChat()
+                    }
+                ) {
+                    Text(if (isClearAction) "Clear" else "Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDestructiveAction = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

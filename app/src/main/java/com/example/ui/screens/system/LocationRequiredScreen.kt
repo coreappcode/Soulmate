@@ -94,7 +94,7 @@ fun LocationRequiredScreen(
             Spacer(modifier = Modifier.height(28.dp))
 
             Text(
-                text = "Location needed",
+                text = "Location is optional",
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 24.sp,

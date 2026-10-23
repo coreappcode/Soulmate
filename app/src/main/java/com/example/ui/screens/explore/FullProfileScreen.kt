@@ -154,20 +154,6 @@ fun FullProfileScreen(
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.45f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Options",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
                 }
 
                 // Photo carousel dots

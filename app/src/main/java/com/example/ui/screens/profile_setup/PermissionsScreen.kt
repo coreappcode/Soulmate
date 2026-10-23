@@ -165,7 +165,7 @@ fun PermissionsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Soulmate works best with these enabled to help discover connections nearby.",
+                text = "Enable optional permissions to improve your experience. Distance matching uses your profile city and country.",
                 fontFamily = InterFontFamily,
                 fontSize = 14.sp,
                 color = TextSecondary,
@@ -177,8 +177,8 @@ fun PermissionsScreen(
             // Card 1: Location
             PermissionCard(
                 icon = Icons.Default.LocationOn,
-                title = "Location",
-                description = "Required to find people nearby",
+                title = "Location (Optional)",
+                description = "Distance matching uses your profile city and country",
                 isAllowed = locationAllowed,
                 onAllow = {
                     locationLauncher.launch(
@@ -360,6 +360,7 @@ private fun PermissionCard(
                     modifier = Modifier
                         .clip(PillShape)
                         .background(AuroraHorizontalGradient)
+                        .clickable(onClick = onAllow)
                         .padding(horizontal = 16.dp, vertical = 9.dp)
                         .testTag("allow_button_${title.lowercase()}"),
                     contentAlignment = Alignment.Center
@@ -370,7 +371,6 @@ private fun PermissionCard(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp,
                         color = Color.White,
-                        modifier = Modifier.clickable { onAllow() }
                     )
                 }
             }

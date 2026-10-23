@@ -201,7 +201,11 @@ fun RequestDetailScreen(
                             color = TextPrimary
                         )
                         Text(
-                            text = "You both love coffee, design & live indie music!",
+                            text = if (request.mutualInterests == 1) {
+                                "You share 1 interest."
+                            } else {
+                                "You share ${request.mutualInterests} interests."
+                            },
                             fontFamily = InterFontFamily,
                             fontSize = 12.sp,
                             color = TextSecondary

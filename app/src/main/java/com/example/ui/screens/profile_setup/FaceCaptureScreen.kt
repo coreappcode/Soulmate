@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,7 +80,7 @@ fun FaceCaptureScreen(
     var isCapturing by remember { mutableStateOf(false) }
     var capturedPhotoUrl by remember { mutableStateOf<String?>(null) }
     var photoError by remember { mutableStateOf<String?>(null) }
-    var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraCaptureUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     // Real Camera Selfie capture launcher
     val takePictureLauncher = rememberLauncherForActivityResult(

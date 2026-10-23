@@ -51,6 +51,10 @@ import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import java.text.ParsePosition
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun DatePickerScreen(
@@ -63,15 +67,64 @@ fun DatePickerScreen(
         "July", "August", "September", "October", "November", "December"
     )
 
-    var selectedYear by remember { mutableIntStateOf(1998) }
-    var selectedMonthIndex by remember { mutableIntStateOf(5) } // June
-    var selectedDay by remember { mutableIntStateOf(15) }
-
-    val daysInMonth = when (selectedMonthIndex) {
-        1 -> if (selectedYear % 4 == 0) 29 else 28
-        3, 5, 8, 10 -> 30
-        else -> 31
+    val dateFormatter = remember {
+        SimpleDateFormat("MMM d, yyyy", Locale.US).apply { isLenient = false }
     }
+    val today = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+    }
+    val initialDate = remember(currentDate) {
+        val parsePosition = ParsePosition(0)
+        val parsed = dateFormatter.parse(currentDate, parsePosition)
+            ?.takeIf { parsePosition.index == currentDate.length }
+        Calendar.getInstance().apply {
+            if (parsed != null) {
+                time = parsed
+            } else {
+                add(Calendar.YEAR, -18)
+            }
+        }
+    }
+
+    var selectedYear by remember(currentDate) {
+        mutableIntStateOf(initialDate.get(Calendar.YEAR))
+    }
+    var selectedMonthIndex by remember(currentDate) {
+        mutableIntStateOf(initialDate.get(Calendar.MONTH))
+    }
+    var selectedDay by remember(currentDate) {
+        mutableIntStateOf(initialDate.get(Calendar.DAY_OF_MONTH))
+    }
+
+    fun isFutureDate(year: Int, monthIndex: Int, day: Int): Boolean {
+        val candidate = Calendar.getInstance().apply {
+            clear()
+            set(year, monthIndex, day)
+        }
+        return candidate.after(today)
+    }
+
+    fun updateMonth(year: Int, monthIndex: Int) {
+        val firstOfMonth = Calendar.getInstance().apply {
+            clear()
+            set(year, monthIndex, 1)
+        }
+        selectedYear = firstOfMonth.get(Calendar.YEAR)
+        selectedMonthIndex = firstOfMonth.get(Calendar.MONTH)
+        selectedDay = selectedDay.coerceAtMost(
+            firstOfMonth.getActualMaximum(Calendar.DAY_OF_MONTH)
+        )
+    }
+
+    val daysInMonth = Calendar.getInstance().apply {
+        clear()
+        set(selectedYear, selectedMonthIndex, 1)
+    }.getActualMaximum(Calendar.DAY_OF_MONTH)
 
     val daysList = (1..daysInMonth).toList()
     val dayNames = listOf("M", "T", "W", "T", "F", "S", "S")
@@ -106,13 +159,17 @@ fun DatePickerScreen(
             ) {
                 IconButton(
                     onClick = {
-                        if (selectedMonthIndex > 0) {
-                            selectedMonthIndex--
-                        } else {
-                            selectedMonthIndex = 11
-                            selectedYear--
+                        val previousMonth = Calendar.getInstance().apply {
+                            clear()
+                            set(selectedYear, selectedMonthIndex, 1)
+                            add(Calendar.MONTH, -1)
                         }
-                    }
+                        updateMonth(
+                            previousMonth.get(Calendar.YEAR),
+                            previousMonth.get(Calendar.MONTH)
+                        )
+                    },
+                    enabled = selectedYear > 1 || selectedMonthIndex > Calendar.JANUARY
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -129,13 +186,24 @@ fun DatePickerScreen(
 
                 IconButton(
                     onClick = {
-                        if (selectedMonthIndex < 11) {
-                            selectedMonthIndex++
-                        } else {
-                            selectedMonthIndex = 0
-                            selectedYear++
+                        val nextMonth = Calendar.getInstance().apply {
+                            clear()
+                            set(selectedYear, selectedMonthIndex, 1)
+                            add(Calendar.MONTH, 1)
                         }
-                    }
+                        val currentMonth = Calendar.getInstance().apply {
+                            clear()
+                            set(today.get(Calendar.YEAR), today.get(Calendar.MONTH), 1)
+                        }
+                        if (!nextMonth.after(currentMonth)) {
+                            updateMonth(
+                                nextMonth.get(Calendar.YEAR),
+                                nextMonth.get(Calendar.MONTH)
+                            )
+                        }
+                    },
+                    enabled = selectedYear < today.get(Calendar.YEAR) ||
+                        selectedMonthIndex < today.get(Calendar.MONTH)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -204,8 +272,9 @@ fun DatePickerScreen(
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(daysList) { day ->
+                    items(daysList) { day ->
                     val isSelected = selectedDay == day
+                    val isFuture = isFutureDate(selectedYear, selectedMonthIndex, day)
 
                     Box(
                         modifier = Modifier
@@ -218,7 +287,7 @@ fun DatePickerScreen(
                                     Modifier
                                 }
                             )
-                            .clickable { selectedDay = day }
+                            .clickable(enabled = !isFuture) { selectedDay = day }
                             .testTag("date_day_$day"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -227,7 +296,11 @@ fun DatePickerScreen(
                             fontFamily = InterFontFamily,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             fontSize = 14.sp,
-                            color = if (isSelected) Color.White else TextPrimary
+                            color = when {
+                                isSelected -> Color.White
+                                isFuture -> TextMuted
+                                else -> TextPrimary
+                            }
                         )
                     }
                 }
@@ -235,11 +308,21 @@ fun DatePickerScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            val formattedDate = "${months[selectedMonthIndex].take(3)} $selectedDay, $selectedYear"
+            val selectedDate = Calendar.getInstance().apply {
+                clear()
+                set(selectedYear, selectedMonthIndex, selectedDay)
+            }
+            val formattedDate = dateFormatter.format(selectedDate.time)
+            val isFutureSelection = isFutureDate(selectedYear, selectedMonthIndex, selectedDay)
 
             GradientButton(
                 text = "Confirm Date ($formattedDate)",
-                onClick = { onDateConfirmed(formattedDate) },
+                onClick = {
+                    if (!isFutureSelection) {
+                        onDateConfirmed(formattedDate)
+                    }
+                },
+                enabled = !isFutureSelection,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)

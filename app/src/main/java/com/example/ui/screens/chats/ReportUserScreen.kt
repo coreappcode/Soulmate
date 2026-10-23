@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
+import kotlinx.coroutines.CancellationException
 import com.example.data.User
 import com.example.ui.components.GradientButton
 import com.example.ui.components.SoulTextField
@@ -140,11 +141,22 @@ fun ReportUserScreen(
                     val reason = selectedReason ?: return@GradientButton
                     scope.launch {
                         isSubmitting = true
-                        val submitted = onSubmit(reason, details.trim())
-                        isSubmitting = false
-                        if (submitted) {
-                            Toast.makeText(context, "Report submitted.", Toast.LENGTH_LONG).show()
-                            onBack()
+                        try {
+                            val submitted = onSubmit(reason, details.trim())
+                            if (submitted) {
+                                Toast.makeText(context, "Report submitted.", Toast.LENGTH_LONG).show()
+                                onBack()
+                            }
+                        } catch (exception: CancellationException) {
+                            throw exception
+                        } catch (exception: Exception) {
+                            Toast.makeText(
+                                context,
+                                exception.localizedMessage ?: "Unable to submit report. Please try again.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } finally {
+                            isSubmitting = false
                         }
                     }
                 },

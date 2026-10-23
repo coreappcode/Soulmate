@@ -220,13 +220,13 @@ fun ChatInfoScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Default.Link, contentDescription = null, tint = OrchidPrimary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Shared Links (0)", fontFamily = InterFontFamily, fontSize = 13.sp, color = TextPrimary)
+                        Text(                        text = "Shared Links — not available yet", fontFamily = InterFontFamily, fontSize = 13.sp, color = TextPrimary)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Default.Description, contentDescription = null, tint = RosePrimary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Documents & Files (0)", fontFamily = InterFontFamily, fontSize = 13.sp, color = TextPrimary)
+                        Text(                        text = "Documents & Files — not available yet", fontFamily = InterFontFamily, fontSize = 13.sp, color = TextPrimary)
                     }
                 }
             }

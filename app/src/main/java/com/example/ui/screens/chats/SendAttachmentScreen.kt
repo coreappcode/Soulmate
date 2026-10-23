@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +69,7 @@ fun SendAttachmentScreen(
 ) {
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var selectedMimeType by remember { mutableStateOf<String?>(null) }
-    var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraCaptureUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var captionText by remember { mutableStateOf("") }
     var actionError by remember { mutableStateOf<String?>(null) }
 
