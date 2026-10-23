@@ -40,7 +40,9 @@ import com.example.utils.findActivity
 @Composable
 fun SoulmateNavGraph(
     navController: NavHostController = rememberNavController(),
-    viewModel: SoulmateViewModel = viewModel()
+    viewModel: SoulmateViewModel = viewModel(),
+    notificationConversationId: String? = null,
+    onNotificationConversationHandled: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val phoneAuthState by viewModel.phoneAuthState.collectAsState()
@@ -351,6 +353,8 @@ fun SoulmateNavGraph(
             DashboardScreen(
                 initialTab = Routes.DASHBOARD_EXPLORE,
                 viewModel = viewModel,
+                notificationConversationId = notificationConversationId,
+                onNotificationConversationHandled = onNotificationConversationHandled,
                 onNavigateToFaceVerify = {
                     navController.navigate(Routes.FACE_CAPTURE)
                 },
@@ -361,7 +365,7 @@ fun SoulmateNavGraph(
                     navController.navigate(Routes.COUNTRY_PICKER)
                 },
                 onLogout = {
-                    viewModel.signOut()
+                    viewModel.signOut(context)
                     navController.navigate(Routes.LANDING) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -374,6 +378,8 @@ fun SoulmateNavGraph(
             DashboardScreen(
                 initialTab = Routes.DASHBOARD_PROFILE,
                 viewModel = viewModel,
+                notificationConversationId = notificationConversationId,
+                onNotificationConversationHandled = onNotificationConversationHandled,
                 onNavigateToFaceVerify = {
                     navController.navigate(Routes.FACE_CAPTURE)
                 },
@@ -384,7 +390,7 @@ fun SoulmateNavGraph(
                     navController.navigate(Routes.COUNTRY_PICKER)
                 },
                 onLogout = {
-                    viewModel.signOut()
+                    viewModel.signOut(context)
                     navController.navigate(Routes.LANDING) {
                         popUpTo(0) { inclusive = true }
                     }

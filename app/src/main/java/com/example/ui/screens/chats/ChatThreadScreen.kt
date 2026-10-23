@@ -1,7 +1,6 @@
 package com.example.ui.screens.chats
 
 // TODO: FLAG_SECURE for production window to prevent screenshots in sensitive chat threads
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -49,8 +48,11 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -58,14 +60,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -74,9 +78,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.example.data.ChatConversation
 import com.example.data.ChatMessage
+import com.example.data.ChatPolicies
 import com.example.data.MessageStatus
 import com.example.ui.components.SoulAvatar
 import com.example.ui.theme.AppBackground
@@ -98,17 +106,24 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun ChatThreadScreen(
     conversation: ChatConversation,
-    onSendMessage: (String) -> Unit,
+    onSendMessage: suspend (String) -> Boolean,
+    onVideoCall: () -> Unit,
+    onLoadOlderMessages: () -> Unit,
     onTypingChanged: (Boolean) -> Unit,
     onOpenAttachment: () -> Unit,
+    onViewAttachment: (String, String?) -> Unit,
     onOpenInfo: () -> Unit,
     onOpenOptions: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     var inputText by remember(conversation.id) { mutableStateOf("") }
+    var isSending by remember(conversation.id) { mutableStateOf(false) }
     var fullScreenImageViewerUrl by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val currentConversation by rememberUpdatedState(conversation)
+    val currentMessageCount by rememberUpdatedState(conversation.messages.size)
+    val loadOlder by rememberUpdatedState(onLoadOlderMessages)
 
     DisposableEffect(conversation.id) {
         onDispose { onTypingChanged(false) }
@@ -118,10 +133,44 @@ fun ChatThreadScreen(
     val user = conversation.user
     val messages = conversation.messages.reversed() // For reverseLayout
 
-    // Auto-scroll on new message
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
+    LaunchedEffect(listState, conversation.id) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .distinctUntilChanged()
+            .collect { lastVisibleIndex ->
+                val current = currentConversation
+                if (
+                    lastVisibleIndex != null &&
+                    current.hasOlderMessages &&
+                    !current.isLoadingOlderMessages &&
+                    lastVisibleIndex >= currentMessageCount - 2
+                ) {
+                    loadOlder()
+                }
+            }
+    }
+
+    LaunchedEffect(messages.firstOrNull()?.id) {
+        if (
+            messages.isNotEmpty() &&
+            ChatPolicies.shouldAutoScrollToLatest(listState.firstVisibleItemIndex)
+        ) {
             listState.animateScrollToItem(0)
+        }
+    }
+
+    fun sendDraft() {
+        val text = inputText.trim()
+        if (text.isBlank() || isSending) return
+        scope.launch {
+            isSending = true
+            try {
+                if (onSendMessage(text)) {
+                    inputText = ""
+                    onTypingChanged(false)
+                }
+            } finally {
+                isSending = false
+            }
         }
     }
 
@@ -230,13 +279,7 @@ fun ChatThreadScreen(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = {
-                            Toast.makeText(
-                                context,
-                                "Video calls are not available yet.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        },
+                        onClick = onVideoCall,
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
@@ -280,8 +323,21 @@ fun ChatThreadScreen(
             items(messages, key = { it.id }) { message ->
                 MessageBubble(
                     message = message,
-                    onImageClick = { fullScreenImageViewerUrl = it }
+                    onImageClick = { fullScreenImageViewerUrl = it },
+                    onViewAttachment = onViewAttachment
                 )
+            }
+
+            if (conversation.isLoadingOlderMessages) {
+                item {
+                    Text(
+                        text = "Loading earlier messages...",
+                        fontFamily = InterFontFamily,
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp)
+                    )
+                }
             }
 
             // Date separator pill centered
@@ -357,8 +413,10 @@ fun ChatThreadScreen(
                     BasicTextField(
                         value = inputText,
                         onValueChange = {
-                            inputText = it
-                            onTypingChanged(it.isNotBlank())
+                            if (ChatPolicies.isMessageLengthValid(it)) {
+                                inputText = it
+                                onTypingChanged(it.isNotBlank())
+                            }
                         },
                         textStyle = TextStyle(
                             fontFamily = InterFontFamily,
@@ -370,11 +428,7 @@ fun ChatThreadScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(
                             onSend = {
-                                if (inputText.isNotBlank()) {
-                                    onTypingChanged(false)
-                                    onSendMessage(inputText.trim())
-                                    inputText = ""
-                                }
+                                sendDraft()
                             }
                         ),
                         modifier = Modifier
@@ -391,20 +445,24 @@ fun ChatThreadScreen(
                             .size(42.dp)
                             .clip(CircleShape)
                             .background(AuroraHorizontalGradient)
-                            .clickable {
-                                onTypingChanged(false)
-                                onSendMessage(inputText.trim())
-                                inputText = ""
-                            }
+                            .clickable(enabled = !isSending) { sendDraft() }
                             .testTag("chat_send_button"),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        if (isSending) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 } else {
                     Box(
@@ -412,14 +470,12 @@ fun ChatThreadScreen(
                             .size(42.dp)
                             .clip(CircleShape)
                             .background(ElevatedSurface)
-                            .clickable {
-                                Toast.makeText(context, "Voice message recording...", Toast.LENGTH_SHORT).show()
-                            },
+                            .clickable { onOpenAttachment() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Mic,
-                            contentDescription = "Voice Message",
+                            contentDescription = "Choose an audio attachment",
                             tint = OrchidPrimary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -433,7 +489,8 @@ fun ChatThreadScreen(
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
-    onImageClick: (String) -> Unit
+    onImageClick: (String) -> Unit,
+    onViewAttachment: (String, String?) -> Unit
 ) {
     val isOwn = message.isOwn
     val alignment = if (isOwn) Alignment.CenterEnd else Alignment.CenterStart
@@ -464,17 +521,53 @@ private fun MessageBubble(
                 .padding(12.dp)
         ) {
             // Optional Image Message (240dp wide, rounded)
-            if (message.imageUrl != null) {
-                AsyncImage(
-                    model = message.imageUrl,
-                    contentDescription = "Photo message",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onImageClick(message.imageUrl) }
-                )
+            val attachmentUrl = message.attachmentUrl
+            if (attachmentUrl != null) {
+                if (message.attachmentType == null || message.attachmentType == "image") {
+                    AsyncImage(
+                        model = attachmentUrl,
+                        contentDescription = "Photo message",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onImageClick(attachmentUrl) }
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isOwn) Color.White.copy(alpha = 0.16f) else ElevatedSurface)
+                            .clickable {
+                                onViewAttachment(attachmentUrl, message.attachmentType)
+                            }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (message.attachmentType == "audio") {
+                                Icons.Default.PlayArrow
+                            } else {
+                                Icons.Default.Description
+                            },
+                            contentDescription = null,
+                            tint = if (isOwn) Color.White else OrchidPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (message.attachmentType == "audio") {
+                                "Open audio attachment"
+                            } else {
+                                "Open document"
+                            },
+                            fontFamily = InterFontFamily,
+                            fontSize = 13.sp,
+                            color = if (isOwn) Color.White else TextPrimary
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(6.dp))
             }
 

@@ -98,6 +98,19 @@ service cloud.firestore {
           : resource.data.userIds[0];
       }
 
+      function participantsHaveNotBlockedEachOther(conversationId) {
+        let participants = get(
+          /databases/$(database)/documents/conversations/$(conversationId)
+        ).data.userIds;
+        let otherUid = participants[0] == request.auth.uid
+          ? participants[1]
+          : participants[0];
+        return !exists(
+            /databases/$(database)/documents/users/$(request.auth.uid)/blocks/$(otherUid))
+          && !exists(
+            /databases/$(database)/documents/users/$(otherUid)/blocks/$(request.auth.uid));
+      }
+
       function validMessageUpdate() {
         let uid = request.auth.uid;
         let otherUid = otherParticipant();
@@ -117,7 +130,8 @@ service cloud.firestore {
           && !exists(messagePath)
           && existsAfter(messagePath)
           && getAfter(messagePath).data.senderId == uid
-          && getAfter(messagePath).data.createdAt == request.time;
+          && getAfter(messagePath).data.createdAt == request.time
+          && participantsHaveNotBlockedEachOther(conversationId);
       }
 
       function validReadUpdate() {
@@ -151,6 +165,7 @@ service cloud.firestore {
             .hasOnly(['typing'])
           && newTyping.keys().hasOnly(resource.data.userIds)
           && newTyping.get(otherUid, null) == oldTyping.get(otherUid, null)
+          && participantsHaveNotBlockedEachOther(conversationId)
           && (myTyping == null
             || (myTyping is map
               && myTyping.keys().hasOnly(['isTyping', 'updatedAt', 'expiresAt'])
@@ -171,13 +186,6 @@ service cloud.firestore {
           && (oldArchived.hasAny([uid]) != newArchived.hasAny([uid]));
       }
 
-      function validLegacyMessageUpdate() {
-        let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
-        return changedKeys.hasOnly(['lastMessage', 'updatedAt'])
-          && changedKeys.hasAny(['updatedAt'])
-          && request.resource.data.updatedAt == request.time;
-      }
-
       allow read: if signedIn() && request.auth.uid in resource.data.userIds;
       allow create: if signedIn()
         && request.auth.uid in request.resource.data.userIds
@@ -192,22 +200,26 @@ service cloud.firestore {
         && request.auth.uid in resource.data.userIds
         && request.resource.data.userIds == resource.data.userIds
         && (validMessageUpdate()
-          || validLegacyMessageUpdate()
           || validReadUpdate()
           || validTypingUpdate()
           || validArchiveUpdate());
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read: if isConversationParticipant(conversationId);
+        allow read: if isConversationParticipant(conversationId)
+          && participantsHaveNotBlockedEachOther(conversationId);
         allow create: if isConversationParticipant(conversationId)
           && request.resource.data.senderId == request.auth.uid
+          && participantsHaveNotBlockedEachOther(conversationId)
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 2000
           && request.resource.data.attachmentType in [null, 'image', 'audio', 'document']
+          && (request.resource.data.attachmentUrl == null
+            || request.resource.data.attachmentUrl is string)
           && request.resource.data.createdAt == request.time;
         allow update: if false;
-        allow delete: if isConversationParticipant(conversationId);
+        allow delete: if isConversationParticipant(conversationId)
+          && resource.data.senderId == request.auth.uid;
       }
     }
 

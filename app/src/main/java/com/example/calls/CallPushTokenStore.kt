@@ -62,6 +62,21 @@ object CallPushTokenStore {
         return tokenHash
     }
 
+    suspend fun unregister(context: Context, uid: String) {
+        val token = FirebaseMessaging.getInstance().token.await()
+        FirebaseFunctions.getInstance("asia-southeast1")
+            .getHttpsCallable("unregisterCallDevice")
+            .call(mapOf("token" to token))
+            .await()
+
+        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        if (preferences.getString(OWNER_UID, null) == uid &&
+            preferences.getString(TOKEN_HASH, null) == sha256(token)
+        ) {
+            preferences.edit().remove(OWNER_UID).remove(TOKEN_HASH).apply()
+        }
+    }
+
     private fun sha256(value: String): String =
         MessageDigest.getInstance("SHA-256")
             .digest(value.toByteArray(Charsets.UTF_8))

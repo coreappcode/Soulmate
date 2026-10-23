@@ -25,7 +25,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Videocam
@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.User
+import com.example.data.ChatMessage
 import com.example.ui.components.SoulTopBar
 import com.example.ui.components.VerifiedBadge
 import com.example.ui.theme.AppBackground
@@ -64,6 +65,8 @@ import com.example.ui.theme.TextSecondary
 fun ChatInfoScreen(
     user: User,
     notificationsMuted: Boolean,
+    sharedAttachments: List<ChatMessage>,
+    onOpenAttachment: (ChatMessage) -> Unit,
     onCallClick: () -> Unit,
     onVideoClick: () -> Unit,
     onMuteClick: () -> Unit,
@@ -189,53 +192,72 @@ fun ChatInfoScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Shared Photos & Media",
+                        text = "Shared Media",
                         fontFamily = PoppinsFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(user.photos) { photo ->
-                            AsyncImage(
-                                model = photo,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .border(1.dp, HairlineDivider, RoundedCornerShape(12.dp))
-                            )
+                    if (sharedAttachments.isEmpty()) {
+                        Text(
+                            text = "No shared attachments yet.",
+                            fontFamily = InterFontFamily,
+                            fontSize = 13.sp,
+                            color = TextSecondary
+                        )
+                    } else {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(sharedAttachments, key = { it.id }) { attachment ->
+                                val url = attachment.attachmentUrl
+                                if (attachment.attachmentType == null ||
+                                    attachment.attachmentType == "image"
+                                ) {
+                                    AsyncImage(
+                                        model = url,
+                                        contentDescription = "Shared photo",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(80.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .border(1.dp, HairlineDivider, RoundedCornerShape(12.dp))
+                                            .clickable { onOpenAttachment(attachment) }
+                                    )
+                                } else {
+                                    Column(
+                                        modifier = Modifier
+                                            .size(100.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(ElevatedSurface)
+                                            .clickable { onOpenAttachment(attachment) }
+                                            .padding(8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (attachment.attachmentType == "audio") {
+                                                Icons.Default.Headphones
+                                            } else {
+                                                Icons.Default.Description
+                                            },
+                                            contentDescription = null,
+                                            tint = OrchidPrimary
+                                        )
+                                        Text(
+                                            text = if (attachment.attachmentType == "audio") "Audio" else "Document",
+                                            fontFamily = InterFontFamily,
+                                            fontSize = 11.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(18.dp))
-
-            // Links & Documents
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.5.dp, HairlineDivider, RoundedCornerShape(20.dp))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Link, contentDescription = null, tint = OrchidPrimary, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(                        text = "Shared Links — not available yet", fontFamily = InterFontFamily, fontSize = 13.sp, color = TextPrimary)
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Description, contentDescription = null, tint = RosePrimary, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(                        text = "Documents & Files — not available yet", fontFamily = InterFontFamily, fontSize = 13.sp, color = TextPrimary)
-                    }
-                }
-            }
 
             Spacer(modifier = Modifier.height(24.dp))
 

@@ -1,6 +1,7 @@
 package com.example.calls
 
 import android.util.Log
+import com.example.data.ChatPolicies
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -18,8 +19,11 @@ class CallMessagingService : FirebaseMessagingService() {
             "incoming_message" -> {
                 val conversationId = message.data["conversationId"]
                 val currentUid = FirebaseAuth.getInstance().currentUser?.uid
-                if (conversationId.isNullOrBlank() || currentUid == null) {
-                    Log.w("CallMessagingService", "Ignoring a chat notification for a signed-out user.")
+                val recipientId = message.data["recipientId"]
+                if (conversationId.isNullOrBlank() ||
+                    !ChatPolicies.isNotificationForUser(currentUid, recipientId)
+                ) {
+                    Log.w("CallMessagingService", "Ignoring a chat notification for a different or signed-out user.")
                     return
                 }
                 ChatNotificationManager.showMessage(

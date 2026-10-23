@@ -44,10 +44,16 @@ data class ConversationSummary(
 
 data class LiveConversationState(
     val messages: List<ChatMessage>,
+    val hasOlderMessages: Boolean,
     val unreadCount: Int,
     val isTyping: Boolean,
     val typingExpiresAtMillis: Long?,
     val latestIncomingMessageAt: Timestamp?
+)
+
+data class ChatMessagePage(
+    val messages: List<ChatMessage>,
+    val hasMore: Boolean
 )
 
 class FirebaseListenerRegistration(
@@ -213,6 +219,10 @@ class FirebaseRepository(
             StorageMetadata.Builder().setContentType(mimeType).build()
         ).await()
         return reference.downloadUrl.await().toString()
+    }
+
+    suspend fun deleteChatAttachment(downloadUrl: String) {
+        storage.getReferenceFromUrl(downloadUrl).delete().await()
     }
 
     suspend fun loadDashboard(): FirebaseDashboardData {
@@ -405,32 +415,14 @@ class FirebaseRepository(
                 .mapNotNull { readAt[it] as? Timestamp }
                 .maxOrNull()
             val clearedAt = historySnapshot?.getTimestamp("clearedAt.$conversationId")
-            val messageDocuments = messagesSnapshot?.documents.orEmpty().filter { message ->
+            val visibleDocuments = messagesSnapshot?.documents.orEmpty().filter { message ->
                 val createdAt = message.getTimestamp("createdAt")
                 createdAt == null || clearedAt == null || createdAt > clearedAt
             }
+            val hasOlderMessages = visibleDocuments.size > ChatPolicies.MESSAGE_PAGE_SIZE
+            val messageDocuments = visibleDocuments.takeLast(ChatPolicies.MESSAGE_PAGE_SIZE)
             val messages = messageDocuments.map { message ->
-                val createdAt = message.getTimestamp("createdAt")
-                val isOwn = message.getString("senderId") == uid
-                ChatMessage(
-                    id = message.id,
-                    text = message.getString("text").orEmpty(),
-                    isOwn = isOwn,
-                    timestamp = createdAt.formatTime(),
-                    status = if (
-                        isOwn &&
-                        createdAt != null &&
-                        otherReadAt != null &&
-                        otherReadAt >= createdAt
-                    ) {
-                        MessageStatus.READ
-                    } else {
-                        MessageStatus.SENT
-                    },
-                    imageUrl = message.getString("attachmentUrl"),
-                    attachmentType = message.getString("attachmentType"),
-                    createdAt = createdAt
-                )
+                message.toChatMessage(uid, otherReadAt)
             }
             val typingByUser = conversation.get("typing") as? Map<*, *>
                 ?: emptyMap<Any, Any>()
@@ -447,6 +439,7 @@ class FirebaseRepository(
             onUpdate(
                 LiveConversationState(
                     messages = messages,
+                    hasOlderMessages = hasOlderMessages,
                     unreadCount = (unreadCounts?.get(uid) as? Number)?.toInt() ?: 0,
                     isTyping = activeTyping != null,
                     typingExpiresAtMillis = activeTyping,
@@ -473,6 +466,7 @@ class FirebaseRepository(
         }
         val messagesListener = conversationReference.collection("messages")
             .orderBy("createdAt", Query.Direction.ASCENDING)
+            .limitToLast(ChatPolicies.MESSAGE_PAGE_SIZE + 1L)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     onError(error)
@@ -494,6 +488,105 @@ class FirebaseRepository(
             }
         return FirebaseListenerRegistration(
             listOf(conversationListener, messagesListener, historyListener)
+        )
+    }
+
+    suspend fun loadOlderMessages(
+        conversationId: String,
+        beforeMessageId: String
+    ): ChatMessagePage {
+        val uid = requireCurrentUid()
+        val conversationReference = firestore.collection("conversations").document(conversationId)
+        val conversation = conversationReference.get().await()
+        val participants = conversation.get("userIds").stringList()
+        require(conversation.exists() && uid in participants) {
+            "This conversation is no longer available."
+        }
+        val messagesReference = conversationReference.collection("messages")
+        val cursor = messagesReference.document(beforeMessageId).get().await()
+        require(cursor.exists()) { "The message history changed. Reopen the conversation." }
+
+        val history = firestore.collection("users").document(uid)
+            .collection("settings").document("chatHistory").get().await()
+        val clearedAt = history.getTimestamp("clearedAt.$conversationId")
+        var query: Query = messagesReference
+        if (clearedAt != null) query = query.whereGreaterThan("createdAt", clearedAt)
+        val snapshots = query
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .endBefore(cursor)
+            .limitToLast(ChatPolicies.MESSAGE_PAGE_SIZE + 1L)
+            .get().await().documents
+        val hasMore = snapshots.size > ChatPolicies.MESSAGE_PAGE_SIZE
+        val page = if (hasMore) snapshots.drop(1) else snapshots
+        val readAt = conversation.get("readAt") as? Map<*, *> ?: emptyMap<Any, Any>()
+        val otherReadAt = participants.asSequence()
+            .filterNot { it == uid }
+            .mapNotNull { readAt[it] as? Timestamp }
+            .maxOrNull()
+        return ChatMessagePage(
+            messages = page.map { it.toChatMessage(uid, otherReadAt) },
+            hasMore = hasMore
+        )
+    }
+
+    suspend fun loadConversationAttachments(conversationId: String): List<ChatMessage> {
+        val uid = requireCurrentUid()
+        val conversation = firestore.collection("conversations").document(conversationId)
+            .get().await()
+        val participants = conversation.get("userIds").stringList()
+        require(conversation.exists() && uid in participants) {
+            "This conversation is no longer available."
+        }
+        val history = firestore.collection("users").document(uid)
+            .collection("settings").document("chatHistory").get().await()
+        val clearedAt = history.getTimestamp("clearedAt.$conversationId")
+        val otherReadAt = (conversation.get("readAt") as? Map<*, *>)
+            ?.let { readAt ->
+                participants.asSequence()
+                    .filterNot { it == uid }
+                    .mapNotNull { readAt[it] as? Timestamp }
+                    .maxOrNull()
+            }
+        return firestore.collection("conversations").document(conversationId)
+            .collection("messages")
+            .whereIn("attachmentType", listOf("image", "audio", "document"))
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(100)
+            .get().await().documents
+            .asSequence()
+            .filter { snapshot ->
+                val createdAt = snapshot.getTimestamp("createdAt")
+                createdAt != null && (clearedAt == null || createdAt > clearedAt)
+            }
+            .map { it.toChatMessage(uid, otherReadAt) }
+            .toList()
+            .asReversed()
+    }
+
+    private fun DocumentSnapshot.toChatMessage(
+        uid: String,
+        otherReadAt: Timestamp?
+    ): ChatMessage {
+        val createdAt = getTimestamp("createdAt")
+        val isOwn = getString("senderId") == uid
+        return ChatMessage(
+            id = id,
+            text = getString("text").orEmpty(),
+            isOwn = isOwn,
+            timestamp = createdAt.formatTime(),
+            status = if (
+                isOwn &&
+                createdAt != null &&
+                otherReadAt != null &&
+                otherReadAt >= createdAt
+            ) {
+                MessageStatus.READ
+            } else {
+                MessageStatus.SENT
+            },
+            attachmentUrl = getString("attachmentUrl"),
+            attachmentType = getString("attachmentType"),
+            createdAt = createdAt
         )
     }
 
@@ -662,12 +755,42 @@ class FirebaseRepository(
         )
     }
 
+    suspend fun openConversation(conversationId: String): ChatConversation {
+        val uid = requireCurrentUid()
+        val reference = firestore.collection("conversations").document(conversationId)
+        val snapshot = reference.get().await()
+        val participants = snapshot.get("userIds").stringList()
+        require(snapshot.exists() && uid in participants && participants.size == 2) {
+            "This conversation is no longer available."
+        }
+        if (uid in snapshot.get("archivedBy").stringList()) {
+            reference.update("archivedBy", FieldValue.arrayRemove(uid)).await()
+        }
+
+        val otherId = participants.first { it != uid }
+        val user = getPublicUser(otherId)
+            ?: throw IllegalStateException("That profile is no longer available.")
+        val notificationSettings = firestore.collection("users").document(uid)
+            .collection("settings").document("chatNotifications").get().await()
+        return ChatConversation(
+            id = conversationId,
+            user = user,
+            lastMessage = snapshot.getString("lastMessage").orEmpty(),
+            timestamp = snapshot.getTimestamp("updatedAt").formatTime(),
+            notificationsMuted = conversationId in
+                notificationSettings.get("mutedConversations").stringList()
+        )
+    }
+
     suspend fun sendMessage(
         conversationId: String,
         text: String,
         attachmentUrl: String? = null,
         attachmentType: String? = null
     ) {
+        require(ChatPolicies.isMessageLengthValid(text)) {
+            "Messages must be ${ChatPolicies.MAX_MESSAGE_LENGTH} characters or fewer."
+        }
         val uid = requireCurrentUid()
         val messageRef = firestore.collection("conversations").document(conversationId)
             .collection("messages").document()

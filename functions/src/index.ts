@@ -7,6 +7,7 @@ import { defineSecret, defineString } from "firebase-functions/params";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
+import { shouldNotifyChatMessage } from "./chatNotificationPolicy.js";
 
 initializeApp();
 setGlobalOptions({ region: "asia-southeast1", maxInstances: 10 });
@@ -64,6 +65,18 @@ export const registerCallDevice = onCall(async (request) => {
   return { registered: true };
 });
 
+export const unregisterCallDevice = onCall(async (request) => {
+  const uid = authenticatedUid(request.auth?.uid);
+  const token = stringValue(request.data?.token);
+  if (!token || token.length > 5_000) {
+    throw new HttpsError("invalid-argument", "A valid messaging token is required.");
+  }
+
+  const tokenId = createHash("sha256").update(token).digest("hex");
+  await db.collection("users").doc(uid).collection("devices").doc(tokenId).delete();
+  return { unregistered: true };
+});
+
 export const notifyOnChatMessage = onDocumentCreated(
   "conversations/{conversationId}/messages/{messageId}",
   async (event) => {
@@ -107,9 +120,12 @@ export const notifyOnChatMessage = onDocumentCreated(
       ]);
 
     const mutedConversations = chatSettings.get("mutedConversations");
-    if (messageSettings.get("pushMessages") === false ||
-        (Array.isArray(mutedConversations) && mutedConversations.includes(conversationId)) ||
-        recipientBlock.exists || senderBlock.exists) {
+    if (!shouldNotifyChatMessage({
+      pushMessagesEnabled: messageSettings.get("pushMessages") !== false,
+      conversationMuted: Array.isArray(mutedConversations) &&
+        mutedConversations.includes(conversationId),
+      hasBlock: recipientBlock.exists || senderBlock.exists,
+    })) {
       return;
     }
 
@@ -137,11 +153,12 @@ export const notifyOnChatMessage = onDocumentCreated(
           type: "incoming_message",
           conversationId,
           messageId,
+          recipientId,
           senderId,
           senderName,
           body,
         },
-        android: { priority: "normal" },
+        android: { priority: "high" },
       });
 
       const invalidTokenRefs = result.responses.flatMap((response, index) => {

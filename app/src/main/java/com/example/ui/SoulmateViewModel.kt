@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Activity
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModel
@@ -12,6 +13,7 @@ import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.example.data.ChatConversation
 import com.example.data.ChatMessage
+import com.example.data.ChatPolicies
 import com.example.data.ConversationSummary
 import com.example.data.Country
 import com.example.data.FriendRequestItem
@@ -25,6 +27,7 @@ import com.example.data.User
 import com.example.data.UserProfileState
 import com.example.data.CountryCatalog
 import com.example.data.UsernameTakenException
+import com.example.calls.CallPushTokenStore
 import com.example.utils.Validators
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -105,6 +108,8 @@ class SoulmateViewModel : ViewModel() {
     private var activeTypingExpiryMillis: Long? = null
     private var lastReadRequestAt: Timestamp? = null
     private var unreadClearRequested = false
+    private var olderMessages = emptyList<ChatMessage>()
+    private var hasOlderMessagesAvailable = false
     private val summaryTypingExpiries = mutableMapOf<String, Long>()
     private val summaryTypingExpiryJobs = mutableMapOf<String, Job>()
     private val _phoneAuthState = MutableStateFlow(PhoneAuthUiState())
@@ -414,9 +419,14 @@ class SoulmateViewModel : ViewModel() {
             conversationId = conversation.id,
             onUpdate = { liveState ->
                 if (_activeConversation.value?.id != conversation.id) return@observeConversation
+                if (olderMessages.isEmpty()) {
+                    hasOlderMessagesAvailable = liveState.hasOlderMessages
+                }
+                val messages = mergeChatMessages(olderMessages, liveState.messages)
                 _activeConversation.update { active ->
                     if (active?.id != conversation.id) active else active.copy(
-                        messages = liveState.messages,
+                        messages = messages,
+                        hasOlderMessages = hasOlderMessagesAvailable,
                         unreadCount = liveState.unreadCount,
                         isTyping = liveState.isTyping
                     )
@@ -424,7 +434,8 @@ class SoulmateViewModel : ViewModel() {
                 _conversations.update { conversations ->
                     conversations.map {
                         if (it.id == conversation.id) it.copy(
-                            messages = liveState.messages,
+                            messages = messages,
+                            hasOlderMessages = hasOlderMessagesAvailable,
                             unreadCount = liveState.unreadCount,
                             isTyping = liveState.isTyping
                         ) else it
@@ -665,9 +676,13 @@ class SoulmateViewModel : ViewModel() {
                 conversation.copy(
                     user = withPresence(conversation.user),
                     messages = existing?.messages.orEmpty(),
+                    sharedAttachments = existing?.sharedAttachments.orEmpty(),
                     isTyping = existing?.isTyping ?: conversation.isTyping,
                     notificationsMuted = existing?.notificationsMuted
-                        ?: conversation.notificationsMuted
+                        ?: conversation.notificationsMuted,
+                    hasOlderMessages = existing?.hasOlderMessages
+                        ?: conversation.hasOlderMessages,
+                    isLoadingOlderMessages = existing?.isLoadingOlderMessages ?: false
                 )
             }
         _friendsList.value = data.friends.filterNot { it.id in blockedIds }.map(::withPresence)
@@ -769,7 +784,8 @@ class SoulmateViewModel : ViewModel() {
         _phoneAuthState.value = PhoneAuthUiState()
     }
 
-    fun signOut() {
+    fun signOut(context: Context) {
+        val uid = firebaseAuth.currentUser?.uid
         presenceSyncJob?.cancel()
         presenceRepository.stopObserving()
         presenceListening = false
@@ -781,6 +797,13 @@ class SoulmateViewModel : ViewModel() {
             }
             stopConversationSummaryListener()
             stopActiveConversationObservation(clearActive = true, publishTypingStop = false)
+            if (uid != null) {
+                try {
+                    CallPushTokenStore.unregister(context.applicationContext, uid)
+                } catch (exception: Exception) {
+                    reportDataError(exception)
+                }
+            }
             try {
                 presenceRepository.setPublishingEnabled(false)
             } catch (exception: Exception) {
@@ -1363,9 +1386,78 @@ class SoulmateViewModel : ViewModel() {
     }
 
     fun selectConversation(conversation: ChatConversation) {
+        if (_activeConversation.value?.id != conversation.id) {
+            olderMessages = emptyList()
+            hasOlderMessagesAvailable = false
+        }
         _activeConversation.value = conversation.copy(user = withPresence(conversation.user))
         observeActiveConversation(conversation)
     }
+
+    fun loadOlderChatMessages(conversationId: String) {
+        val active = _activeConversation.value ?: return
+        if (
+            active.id != conversationId ||
+            active.isLoadingOlderMessages ||
+            !active.hasOlderMessages
+        ) return
+        val beforeMessageId = active.messages.firstOrNull()?.id ?: return
+        updateConversation(conversationId) { it.copy(isLoadingOlderMessages = true) }
+        viewModelScope.launch {
+            try {
+                val page = repository.loadOlderMessages(conversationId, beforeMessageId)
+                if (_activeConversation.value?.id != conversationId) return@launch
+                olderMessages = mergeChatMessages(olderMessages, page.messages)
+                hasOlderMessagesAvailable = page.hasMore
+                updateConversation(conversationId) {
+                    it.copy(
+                        messages = mergeChatMessages(olderMessages, it.messages),
+                        hasOlderMessages = page.hasMore
+                    )
+                }
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            } finally {
+                updateConversation(conversationId) {
+                    it.copy(isLoadingOlderMessages = false)
+                }
+            }
+        }
+    }
+
+    fun loadConversationAttachments(conversationId: String) {
+        viewModelScope.launch {
+            try {
+                val attachments = repository.loadConversationAttachments(conversationId)
+                updateConversation(conversationId) { it.copy(sharedAttachments = attachments) }
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            }
+        }
+    }
+
+    private fun updateConversation(
+        conversationId: String,
+        transform: (ChatConversation) -> ChatConversation
+    ) {
+        _activeConversation.update { active ->
+            if (active?.id == conversationId) transform(active) else active
+        }
+        _conversations.update { items ->
+            items.map { if (it.id == conversationId) transform(it) else it }
+        }
+    }
+
+    private fun mergeChatMessages(
+        older: List<ChatMessage>,
+        newer: List<ChatMessage>
+    ): List<ChatMessage> = (older + newer)
+        .distinctBy { it.id }
+        .sortedWith(
+            compareBy<ChatMessage> { it.createdAt?.seconds ?: Long.MIN_VALUE }
+                .thenBy { it.createdAt?.nanoseconds ?: 0 }
+                .thenBy { it.id }
+        )
 
     fun prepareConversationActions(conversation: ChatConversation) {
         stopActiveConversationObservation(clearActive = false)
@@ -1410,42 +1502,84 @@ class SoulmateViewModel : ViewModel() {
         }
     }
 
-    fun sendMessage(
+    fun openConversationById(
+        conversationId: String,
+        onComplete: (ChatConversation?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val conversation = try {
+                repository.openConversation(conversationId).also { opened ->
+                    _activeConversation.value = opened
+                    _conversations.update { current ->
+                        listOf(opened) + current.filterNot { it.id == opened.id }
+                    }
+                    selectConversation(opened)
+                }
+            } catch (exception: Exception) {
+                reportDataError(exception)
+                null
+            }
+            onComplete(conversation)
+        }
+    }
+
+    suspend fun sendMessage(
         text: String,
         attachmentUri: String? = null,
         mimeType: String? = null
-    ) {
-        val conversation = _activeConversation.value ?: return
-        viewModelScope.launch {
+    ): Boolean {
+        val conversation = _activeConversation.value ?: return false
+        if (!ChatPolicies.isMessageLengthValid(text)) {
+            reportDataError(IllegalArgumentException(
+                "Messages must be ${ChatPolicies.MAX_MESSAGE_LENGTH} characters or fewer."
+            ))
+            return false
+        }
+        var uploadedAttachmentUrl: String? = null
+        return try {
+            val contentType = mimeType ?: if (attachmentUri != null) "image/jpeg" else null
+            val attachmentUrl = attachmentUri?.let { value ->
+                val uri = Uri.parse(value)
+                if (uri.scheme == "content" || uri.scheme == "file") {
+                    repository.uploadChatAttachment(
+                        conversation.id,
+                        uri,
+                        contentType ?: "application/octet-stream"
+                    ).also { uploadedAttachmentUrl = it }
+                } else {
+                    value
+                }
+            }
+            val attachmentType = when {
+                contentType == null -> null
+                contentType.startsWith("image/") -> "image"
+                contentType.startsWith("audio/") -> "audio"
+                else -> "document"
+            }
             try {
-                val contentType = mimeType ?: if (attachmentUri != null) "image/jpeg" else null
-                val attachmentUrl = attachmentUri?.let { value ->
-                    val uri = Uri.parse(value)
-                    if (uri.scheme == "content" || uri.scheme == "file") {
-                        repository.uploadChatAttachment(
-                            conversation.id,
-                            uri,
-                            contentType ?: "application/octet-stream"
-                        )
-                    } else {
-                        value
-                    }
-                }
-                val attachmentType = when {
-                    contentType == null -> null
-                    contentType.startsWith("image/") -> "image"
-                    contentType.startsWith("audio/") -> "audio"
-                    else -> "document"
-                }
                 repository.sendMessage(
                     conversation.id,
                     text,
                     attachmentUrl,
                     attachmentType
                 )
-            } catch (exception: Exception) {
-                reportDataError(exception)
+            } catch (sendException: Exception) {
+                if (uploadedAttachmentUrl != null) {
+                    try {
+                        repository.deleteChatAttachment(uploadedAttachmentUrl.orEmpty())
+                    } catch (cleanupException: Exception) {
+                        throw IllegalStateException(
+                            "The message failed and its uploaded attachment could not be removed.",
+                            cleanupException
+                        ).also { it.addSuppressed(sendException) }
+                    }
+                }
+                throw sendException
             }
+            true
+        } catch (exception: Exception) {
+            reportDataError(exception)
+            false
         }
     }
 
@@ -1454,6 +1588,8 @@ class SoulmateViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 repository.clearConversation(active.id)
+                olderMessages = emptyList()
+                hasOlderMessagesAvailable = false
                 repository.markConversationRead(
                     active.id,
                     null,

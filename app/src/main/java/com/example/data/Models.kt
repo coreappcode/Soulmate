@@ -106,7 +106,7 @@ data class ChatMessage(
     val isOwn: Boolean,
     val timestamp: String,
     val status: MessageStatus = MessageStatus.SENT,
-    val imageUrl: String? = null,
+    val attachmentUrl: String? = null,
     val attachmentType: String? = null,
     val createdAt: Timestamp? = null
 )
@@ -119,7 +119,10 @@ data class ChatConversation(
     val unreadCount: Int = 0,
     val isTyping: Boolean = false,
     val notificationsMuted: Boolean = false,
-    val messages: List<ChatMessage> = emptyList()
+    val messages: List<ChatMessage> = emptyList(),
+    val sharedAttachments: List<ChatMessage> = emptyList(),
+    val hasOlderMessages: Boolean = false,
+    val isLoadingOlderMessages: Boolean = false
 )
 
 data class FriendRequestItem(

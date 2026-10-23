@@ -3,6 +3,8 @@ package com.example.ui.screens.dashboard
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import android.content.Intent
+import android.content.ActivityNotFoundException
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -85,7 +87,7 @@ sealed interface ActiveSubScreen {
     data class ChatOptions(val user: User) : ActiveSubScreen
     data class ChatInfo(val user: User) : ActiveSubScreen
     data class ReportUser(val user: User) : ActiveSubScreen
-    data object ChatAttachment : ActiveSubScreen
+    data class ChatAttachment(val conversation: ChatConversation) : ActiveSubScreen
     data object BlockedUsers : ActiveSubScreen
 
     // Friends sub-screens
@@ -122,10 +124,13 @@ fun DashboardScreen(
     onNavigateToFaceVerify: () -> Unit,
     onNavigateToDatePicker: () -> Unit,
     onNavigateToCountryPicker: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    notificationConversationId: String? = null,
+    onNotificationConversationHandled: (String) -> Unit = {}
 ) {
     var currentTab by remember { mutableStateOf(initialTab) }
     var activeSubScreen by remember { mutableStateOf<ActiveSubScreen>(ActiveSubScreen.None) }
+    var chatReturnConversationId by remember { mutableStateOf<String?>(null) }
 
     val userProfile by viewModel.uiState.collectAsState()
     val exploreDeck by viewModel.exploreDeck.collectAsState()
@@ -165,6 +170,36 @@ fun DashboardScreen(
         )
     }
 
+    fun returnToChatThread() {
+        val conversationId = chatReturnConversationId
+        val conversation = conversations.firstOrNull { it.id == conversationId }
+        if (conversation == null) {
+            viewModel.closeActiveConversation()
+            chatReturnConversationId = null
+            activeSubScreen = ActiveSubScreen.None
+            return
+        }
+        currentTab = Routes.DASHBOARD_CHATS
+        activeSubScreen = ActiveSubScreen.ChatThread(conversation)
+        viewModel.selectConversation(conversation)
+    }
+
+    fun openChatAttachment(url: String, attachmentType: String?) {
+        val mimeType = when (attachmentType) {
+            "audio" -> "audio/*"
+            "document" -> "*/*"
+            else -> "image/*"
+        }
+        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(url), mimeType)
+        try {
+            context.startActivity(intent)
+        } catch (exception: ActivityNotFoundException) {
+            Toast.makeText(context, "No app can open this attachment.", Toast.LENGTH_LONG).show()
+        } catch (exception: SecurityException) {
+            Toast.makeText(context, "Unable to open this attachment.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     LaunchedEffect(userProfile.dataError) {
         userProfile.dataError?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -172,10 +207,45 @@ fun DashboardScreen(
         }
     }
 
+    LaunchedEffect(
+        notificationConversationId,
+        userProfile.isProfileLoading,
+        userProfile.isPhoneVerified
+    ) {
+        val conversationId = notificationConversationId ?: return@LaunchedEffect
+        if (userProfile.isProfileLoading || !userProfile.isPhoneVerified) return@LaunchedEffect
+        viewModel.openConversationById(conversationId) { conversation ->
+            if (conversation != null) {
+                chatReturnConversationId = conversation.id
+                currentTab = Routes.DASHBOARD_CHATS
+                activeSubScreen = ActiveSubScreen.ChatThread(conversation)
+            }
+            onNotificationConversationHandled(conversationId)
+        }
+    }
+
     // Handle back button for any active sub-screen
     BackHandler(enabled = activeSubScreen !is ActiveSubScreen.None) {
-        viewModel.closeActiveConversation()
-        activeSubScreen = ActiveSubScreen.None
+        when (activeSubScreen) {
+            is ActiveSubScreen.ChatThread -> {
+                viewModel.closeActiveConversation()
+                chatReturnConversationId = null
+                activeSubScreen = ActiveSubScreen.None
+            }
+            is ActiveSubScreen.ChatOptions,
+            is ActiveSubScreen.ChatInfo,
+            is ActiveSubScreen.ReportUser,
+            is ActiveSubScreen.ChatAttachment -> returnToChatThread()
+            is ActiveSubScreen.ExploreProfileDetail -> {
+                if (chatReturnConversationId != null) returnToChatThread()
+                else activeSubScreen = ActiveSubScreen.None
+            }
+            else -> {
+                viewModel.closeActiveConversation()
+                chatReturnConversationId = null
+                activeSubScreen = ActiveSubScreen.None
+            }
+        }
     }
 
     Scaffold(
@@ -186,6 +256,8 @@ fun DashboardScreen(
                     currentRoute = currentTab,
                     chatUnreadCount = conversations.sumOf { it.unreadCount },
                     onNavigate = { newRoute ->
+                        viewModel.closeActiveConversation()
+                        chatReturnConversationId = null
                         currentTab = newRoute
                         activeSubScreen = ActiveSubScreen.None
                     }
@@ -237,7 +309,10 @@ fun DashboardScreen(
                 is ActiveSubScreen.ExploreProfileDetail -> {
                     FullProfileScreen(
                         user = sub.user,
-                        onBack = { activeSubScreen = ActiveSubScreen.None },
+                        onBack = {
+                            if (chatReturnConversationId != null) returnToChatThread()
+                            else activeSubScreen = ActiveSubScreen.None
+                        },
                         onPass = {
                             viewModel.swipePass(sub.user)
                             activeSubScreen = ActiveSubScreen.None
@@ -277,18 +352,25 @@ fun DashboardScreen(
                         onSendMessage = { text ->
                             viewModel.sendMessage(text)
                         },
+                        onVideoCall = { openCall(activeConv.user, "video") },
+                        onLoadOlderMessages = { viewModel.loadOlderChatMessages(activeConv.id) },
+                        onViewAttachment = ::openChatAttachment,
                         onTypingChanged = viewModel::updateChatTyping,
                         onOpenAttachment = {
-                            activeSubScreen = ActiveSubScreen.ChatAttachment
+                            chatReturnConversationId = activeConv.id
+                            activeSubScreen = ActiveSubScreen.ChatAttachment(activeConv)
                         },
                         onOpenInfo = {
+                            chatReturnConversationId = activeConv.id
                             activeSubScreen = ActiveSubScreen.ChatInfo(activeConv.user)
                         },
                         onOpenOptions = {
+                            chatReturnConversationId = activeConv.id
                             activeSubScreen = ActiveSubScreen.ChatOptions(activeConv.user)
                         },
                         onBack = {
                             viewModel.closeActiveConversation()
+                            chatReturnConversationId = null
                             activeSubScreen = ActiveSubScreen.None
                         }
                     )
@@ -316,11 +398,13 @@ fun DashboardScreen(
                         onClearChat = {
                             viewModel.clearActiveChat()
                             viewModel.closeActiveConversation()
+                            chatReturnConversationId = null
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onBlockUser = {
                             viewModel.blockUser(sub.user)
                             viewModel.closeActiveConversation()
+                            chatReturnConversationId = null
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onReportUser = {
@@ -328,20 +412,27 @@ fun DashboardScreen(
                         },
                         onDeleteChat = {
                             viewModel.deleteActiveChat()
+                            chatReturnConversationId = null
                             activeSubScreen = ActiveSubScreen.None
                         },
-                        onBack = {
-                            viewModel.closeActiveConversation()
-                            activeSubScreen = ActiveSubScreen.None
-                        }
+                        onBack = ::returnToChatThread
                     )
                 }
 
                 is ActiveSubScreen.ChatInfo -> {
                     val conversation = conversations.firstOrNull { it.user.id == sub.user.id }
+                    LaunchedEffect(conversation?.id) {
+                        conversation?.let { viewModel.loadConversationAttachments(it.id) }
+                    }
                     ChatInfoScreen(
                         user = sub.user,
                         notificationsMuted = conversation?.notificationsMuted == true,
+                        sharedAttachments = conversation?.sharedAttachments.orEmpty(),
+                        onOpenAttachment = { attachment ->
+                            attachment.attachmentUrl?.let {
+                                openChatAttachment(it, attachment.attachmentType)
+                            }
+                        },
                         onCallClick = {
                             openCall(sub.user, "audio")
                         },
@@ -359,15 +450,13 @@ fun DashboardScreen(
                         onBlockClick = {
                             viewModel.blockUser(sub.user)
                             viewModel.closeActiveConversation()
+                            chatReturnConversationId = null
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onReportClick = {
                             activeSubScreen = ActiveSubScreen.ReportUser(sub.user)
                         },
-                        onBack = {
-                            viewModel.closeActiveConversation()
-                            activeSubScreen = ActiveSubScreen.None
-                        }
+                        onBack = ::returnToChatThread
                     )
                 }
 
@@ -377,10 +466,7 @@ fun DashboardScreen(
                         onSubmit = { reason, details ->
                             viewModel.submitUserReport(sub.user.id, reason, details)
                         },
-                        onBack = {
-                            viewModel.closeActiveConversation()
-                            activeSubScreen = ActiveSubScreen.None
-                        }
+                        onBack = ::returnToChatThread
                     )
                 }
 
@@ -388,13 +474,11 @@ fun DashboardScreen(
                     SendAttachmentScreen(
                         onSendAttachment = { uri, caption, mimeType ->
                             viewModel.updateChatTyping(false)
-                            viewModel.sendMessage(caption, uri.toString(), mimeType)
-                            activeSubScreen = ActiveSubScreen.None
+                            val sent = viewModel.sendMessage(caption, uri.toString(), mimeType)
+                            if (sent) returnToChatThread()
+                            sent
                         },
-                        onBack = {
-                            viewModel.closeActiveConversation()
-                            activeSubScreen = ActiveSubScreen.None
-                        }
+                        onBack = ::returnToChatThread
                     )
                 }
 
@@ -722,6 +806,7 @@ fun DashboardScreen(
                                     },
                                     onLongPressConversation = { conv ->
                                         viewModel.prepareConversationActions(conv)
+                                        chatReturnConversationId = conv.id
                                         activeSubScreen = ActiveSubScreen.ChatOptions(conv.user)
                                     },
                                     onNewChatClick = {

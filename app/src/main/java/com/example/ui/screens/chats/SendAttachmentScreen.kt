@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +47,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.example.ui.components.GradientButton
 import com.example.ui.components.SoulTextField
@@ -64,7 +67,7 @@ import com.example.utils.launchCameraCapture
 
 @Composable
 fun SendAttachmentScreen(
-    onSendAttachment: (uri: Uri, caption: String, mimeType: String) -> Unit,
+    onSendAttachment: suspend (uri: Uri, caption: String, mimeType: String) -> Boolean,
     onBack: () -> Unit
 ) {
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -72,8 +75,10 @@ fun SendAttachmentScreen(
     var cameraCaptureUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var captionText by remember { mutableStateOf("") }
     var actionError by remember { mutableStateOf<String?>(null) }
+    var isSending by remember { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -115,7 +120,25 @@ fun SendAttachmentScreen(
     fun sendSelectedAttachment() {
         val uri = selectedImageUri ?: return
         val mimeType = selectedMimeType ?: return
-        onSendAttachment(uri, captionText, mimeType)
+        if (isSending) return
+        scope.launch {
+            isSending = true
+            actionError = null
+            try {
+                if (onSendAttachment(uri, captionText.trim(), mimeType)) {
+                    onBack()
+                } else {
+                    actionError = "Unable to send this attachment. Your selection is still available."
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                actionError = exception.localizedMessage
+                    ?: "Unable to send this attachment. Please try again."
+            } finally {
+                isSending = false
+            }
+        }
     }
 
     Column(
@@ -127,7 +150,7 @@ fun SendAttachmentScreen(
         SoulTopBar(
             title = "Send Attachment",
             showBack = true,
-            onBackClick = onBack
+            onBackClick = { if (!isSending) onBack() }
         )
 
         if (!actionError.isNullOrBlank()) {
@@ -195,8 +218,19 @@ fun SendAttachmentScreen(
                 SoulTextField(
                     label = "Caption",
                     value = captionText,
-                    onValueChange = { captionText = it },
+                    onValueChange = {
+                        if (it.length <= com.example.data.ChatPolicies.MAX_MESSAGE_LENGTH) {
+                            captionText = it
+                        }
+                    },
                     placeholder = "Add a caption..."
+                )
+                Text(
+                    text = "${captionText.length}/${com.example.data.ChatPolicies.MAX_MESSAGE_LENGTH}",
+                    fontFamily = InterFontFamily,
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.fillMaxWidth()
                 )
             } else {
                 Text(
@@ -274,12 +308,13 @@ fun SendAttachmentScreen(
                     .padding(horizontal = 20.dp, vertical = 14.dp)
             ) {
                 GradientButton(
-                    text = when {
+                    text = if (isSending) "Sending..." else when {
                         selectedMimeType?.startsWith("image/") == true -> "Send Photo"
                         selectedMimeType?.startsWith("audio/") == true -> "Send Audio"
                         else -> "Send Document"
                     },
                     onClick = ::sendSelectedAttachment,
+                    enabled = !isSending,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
