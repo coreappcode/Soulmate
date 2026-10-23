@@ -50,7 +50,8 @@ fun EditUsernameScreen(
     currentUsername: String,
     onCheckAvailability: suspend (String) -> Boolean,
     onSave: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isSaving: Boolean = false
 ) {
     var username by remember { mutableStateOf(currentUsername) }
     var isChecking by remember { mutableStateOf(false) }
@@ -195,7 +196,8 @@ fun EditUsernameScreen(
             GradientButton(
                 text = "Save Username",
                 onClick = { onSave(username) },
-                enabled = canSave,
+                enabled = canSave && !isSaving,
+                loading = isSaving,
                 modifier = Modifier.fillMaxWidth()
             )
         }

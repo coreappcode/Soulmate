@@ -60,7 +60,8 @@ fun EditBasicInfoScreen(
     currentCity: String,
     onSave: (name: String, dob: String, gender: String, city: String) -> Unit,
     onOpenDatePicker: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isSaving: Boolean = false
 ) {
     var name by remember { mutableStateOf(currentName) }
     var dob by remember(currentDob) { mutableStateOf(currentDob) }
@@ -224,7 +225,8 @@ fun EditBasicInfoScreen(
             GradientButton(
                 text = "Save Changes",
                 onClick = { onSave(name, dob, gender, city) },
-                enabled = canSave,
+                enabled = canSave && !isSaving,
+                loading = isSaving,
                 modifier = Modifier.fillMaxWidth()
             )
         }

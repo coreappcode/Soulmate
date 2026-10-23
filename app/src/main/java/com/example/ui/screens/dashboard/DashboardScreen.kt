@@ -17,6 +17,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -64,7 +65,9 @@ import com.example.ui.screens.settings.TermsScreen
 import com.example.ui.screens.settings.VerificationStatusScreen
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.HeaderBackground
+import com.example.utils.Validators
 import com.example.utils.findActivity
+import kotlinx.coroutines.launch
 
 sealed interface ActiveSubScreen {
     data object None : ActiveSubScreen
@@ -137,8 +140,17 @@ fun DashboardScreen(
     val usernameSearchResults by viewModel.usernameSearchResults.collectAsState()
     val phoneAuthState by viewModel.phoneAuthState.collectAsState()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val phoneAuthActivity = context.findActivity()
     val sentRequestIds = remember(sentRequests) { sentRequests.map { it.user.id }.toSet() }
+
+    fun saveProfileEdit(transform: (UserProfileState) -> UserProfileState) {
+        coroutineScope.launch {
+            if (viewModel.persistProfileEdit(transform)) {
+                activeSubScreen = ActiveSubScreen.None
+            }
+        }
+    }
 
     LaunchedEffect(userProfile.dataError) {
         userProfile.dataError?.let { message ->
@@ -523,10 +535,10 @@ fun DashboardScreen(
                         currentUsername = userProfile.username,
                         onCheckAvailability = { viewModel.isUsernameAvailable(it) },
                         onSave = { newUsername ->
-                            viewModel.updateUsername(newUsername)
-                            activeSubScreen = ActiveSubScreen.None
+                            saveProfileEdit { it.copy(username = newUsername) }
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = { activeSubScreen = ActiveSubScreen.None },
+                        isSaving = userProfile.isSavingProfile
                     )
                 }
 
@@ -534,10 +546,10 @@ fun DashboardScreen(
                     EmailScreen(
                         currentEmail = userProfile.email,
                         onSave = { newEmail ->
-                            viewModel.updateEmail(newEmail)
-                            activeSubScreen = ActiveSubScreen.None
+                            saveProfileEdit { it.copy(email = newEmail) }
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = { activeSubScreen = ActiveSubScreen.None },
+                        isSaving = userProfile.isSavingProfile
                     )
                 }
 
@@ -576,14 +588,19 @@ fun DashboardScreen(
                         currentGender = userProfile.gender,
                         currentCity = userProfile.city,
                         onSave = { name, dob, gender, city ->
-                            viewModel.updateFullName(name)
-                            viewModel.updateDateOfBirth(dob)
-                            viewModel.updateGender(gender)
-                            viewModel.updateCity(city)
-                            activeSubScreen = ActiveSubScreen.None
+                            saveProfileEdit {
+                                it.copy(
+                                    fullName = name,
+                                    dateOfBirth = dob,
+                                    age = Validators.ageFromDateOfBirth(dob) ?: 0,
+                                    gender = gender,
+                                    city = city
+                                )
+                            }
                         },
                         onOpenDatePicker = onNavigateToDatePicker,
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = { activeSubScreen = ActiveSubScreen.None },
+                        isSaving = userProfile.isSavingProfile
                     )
                 }
 
@@ -593,10 +610,16 @@ fun DashboardScreen(
                         currentInterests = userProfile.selectedInterests,
                         currentLookingFor = userProfile.selectedLookingFor,
                         onSave = { bio, interests, lookingFor ->
-                            viewModel.updateAboutPreferences(bio, interests, lookingFor)
-                            activeSubScreen = ActiveSubScreen.None
+                            saveProfileEdit {
+                                it.copy(
+                                    bio = bio,
+                                    selectedInterests = interests,
+                                    selectedLookingFor = lookingFor
+                                )
+                            }
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = { activeSubScreen = ActiveSubScreen.None },
+                        isSaving = userProfile.isSavingProfile
                     )
                 }
 

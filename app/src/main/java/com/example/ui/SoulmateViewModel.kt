@@ -574,6 +574,36 @@ class SoulmateViewModel : ViewModel() {
         scheduleProfilePersistence()
     }
 
+    suspend fun persistProfileEdit(
+        transform: (UserProfileState) -> UserProfileState
+    ): Boolean {
+        if (_uiState.value.isSavingProfile) return false
+        if (firebaseAuth.currentUser == null) {
+            reportDataError(IllegalStateException("You must be signed in to save profile changes."))
+            return false
+        }
+
+        profileSaveJob?.cancel()
+        profileSaveJob = null
+        val editedProfile = transform(_uiState.value)
+        _uiState.update { it.copy(isSavingProfile = true, dataError = null) }
+
+        return try {
+            if (editedProfile.isOnboardingComplete) {
+                repository.saveProfile(editedProfile, complete = true)
+            } else {
+                repository.saveDraft(editedProfile)
+            }
+            _uiState.update { current ->
+                transform(current).copy(isSavingProfile = false, dataError = null)
+            }
+            true
+        } catch (exception: Exception) {
+            reportDataError(exception)
+            false
+        }
+    }
+
     private fun applyStoredSettings(settings: Map<String, Map<String, Any?>>) {
         fun number(document: String, field: String, default: Float): Float =
             (settings[document]?.get(field) as? Number)?.toFloat() ?: default

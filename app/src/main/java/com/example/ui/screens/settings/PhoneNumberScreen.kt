@@ -63,8 +63,22 @@ fun PhoneNumberScreen(
 ) {
     var phone by remember(currentPhone) {
         mutableStateOf(
-            currentPhone.removePrefix(currentCountry.dialCode).filter(Char::isDigit)
+            if (currentPhone.startsWith("+")) {
+                currentPhone.removePrefix(currentCountry.dialCode)
+                    .takeIf { it != currentPhone }
+                    ?.filter(Char::isDigit)
+                    .orEmpty()
+            } else {
+                currentPhone.filter(Char::isDigit)
+            }
         )
+    }
+    var previousDialCode by remember { mutableStateOf(currentCountry.dialCode) }
+    LaunchedEffect(currentCountry.dialCode) {
+        if (previousDialCode != currentCountry.dialCode) {
+            phone = ""
+            previousDialCode = currentCountry.dialCode
+        }
     }
     val isValid = Validators.isValidPhoneNumber(phone)
     val isCodeSent = isPhoneUpdate && codeSentVersion > 0

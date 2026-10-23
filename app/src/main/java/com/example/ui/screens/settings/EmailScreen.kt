@@ -44,7 +44,8 @@ import com.example.utils.Validators
 fun EmailScreen(
     currentEmail: String,
     onSave: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isSaving: Boolean = false
 ) {
     var email by remember { mutableStateOf(currentEmail) }
     val isValid = Validators.isValidEmail(email)
@@ -130,7 +131,8 @@ fun EmailScreen(
             GradientButton(
                 text = "Save Email",
                 onClick = { onSave(email) },
-                enabled = isValid,
+                enabled = isValid && !isSaving,
+                loading = isSaving,
                 modifier = Modifier.fillMaxWidth()
             )
         }

@@ -59,7 +59,8 @@ fun EditAboutScreen(
     currentInterests: List<String>,
     currentLookingFor: List<String>,
     onSave: (bio: String, interests: List<String>, lookingFor: List<String>) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isSaving: Boolean = false
 ) {
     var bio by remember { mutableStateOf(currentBio) }
     var selectedInterests by remember { mutableStateOf(currentInterests) }
@@ -279,7 +280,8 @@ fun EditAboutScreen(
             GradientButton(
                 text = "Save Preferences",
                 onClick = { onSave(bio, selectedInterests, selectedLookingFor) },
-                enabled = canSave,
+                enabled = canSave && !isSaving,
+                loading = isSaving,
                 modifier = Modifier.fillMaxWidth()
             )
         }
