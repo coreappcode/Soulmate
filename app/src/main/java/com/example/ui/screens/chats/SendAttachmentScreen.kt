@@ -59,6 +59,7 @@ import com.example.ui.theme.RosePrimary
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.utils.createCameraCaptureUri
+import com.example.utils.launchCameraCapture
 
 @Composable
 fun SendAttachmentScreen(
@@ -69,6 +70,7 @@ fun SendAttachmentScreen(
     var selectedMimeType by remember { mutableStateOf<String?>(null) }
     var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
     var captionText by remember { mutableStateOf("") }
+    var actionError by remember { mutableStateOf<String?>(null) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -126,6 +128,16 @@ fun SendAttachmentScreen(
             showBack = true,
             onBackClick = onBack
         )
+
+        if (!actionError.isNullOrBlank()) {
+            Text(
+                text = actionError.orEmpty(),
+                color = RosePrimary,
+                fontFamily = InterFontFamily,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -222,9 +234,10 @@ fun SendAttachmentScreen(
                         title = "Take Instant Photo",
                         description = "Capture an authentic live moment",
                         onClick = {
+                            actionError = null
                             val uri = context.createCameraCaptureUri("chat_attachment")
                             cameraCaptureUri = uri
-                            takePictureLauncher.launch(uri)
+                            takePictureLauncher.launchCameraCapture(uri) { actionError = it }
                         }
                     )
 

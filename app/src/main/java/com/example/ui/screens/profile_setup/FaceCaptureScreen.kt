@@ -68,6 +68,7 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.utils.createCameraCaptureUri
+import com.example.utils.launchCameraCapture
 
 @Composable
 fun FaceCaptureScreen(
@@ -266,7 +267,10 @@ fun FaceCaptureScreen(
                             photoError = null
                             val uri = context.createCameraCaptureUri("selfie")
                             cameraCaptureUri = uri
-                            takePictureLauncher.launch(uri)
+                            takePictureLauncher.launchCameraCapture(uri) {
+                                isCapturing = false
+                                photoError = it
+                            }
                         },
                         loading = isCapturing,
                         modifier = Modifier.fillMaxWidth().testTag("take_selfie_button")

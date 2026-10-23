@@ -52,6 +52,7 @@ import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.utils.createCameraCaptureUri
+import com.example.utils.launchCameraCapture
 
 @Composable
 fun AddPhotoScreen(
@@ -174,7 +175,7 @@ fun AddPhotoScreen(
                     photoError = null
                     val uri = context.createCameraCaptureUri("profile_photo")
                     cameraCaptureUri = uri
-                    takePictureLauncher.launch(uri)
+                    takePictureLauncher.launchCameraCapture(uri) { photoError = it }
                 },
                 tag = "take_photo_card"
             )
