@@ -14,6 +14,7 @@ import com.example.data.ChatMessage
 import com.example.data.Country
 import com.example.data.FriendRequestItem
 import com.example.data.FirebaseDashboardData
+import com.example.data.FirebasePresenceRepository
 import com.example.data.FirebaseRepository
 import com.example.data.MessageStatus
 import com.example.data.SentFriendRequest
@@ -79,11 +80,17 @@ class SoulmateViewModel : ViewModel() {
 
     private val firebaseAuth = FirebaseAuth.getInstance()
     private val repository = FirebaseRepository(firebaseAuth)
+    private val presenceRepository = FirebasePresenceRepository(firebaseAuth)
     private var verificationId: String? = null
     private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
     private var dataLoadJob: Job? = null
     private var profileSaveJob: Job? = null
     private var loadedUid: String? = null
+    private var appInForeground = false
+    private var privacySettingsLoaded = false
+    private var presenceListening = false
+    private var onlineUserIds = emptySet<String>()
+    private var presenceSyncJob: Job? = null
     private val _phoneAuthState = MutableStateFlow(PhoneAuthUiState())
     val phoneAuthState: StateFlow<PhoneAuthUiState> = _phoneAuthState.asStateFlow()
     private var pendingPhoneNumberForProfile: String? = null
@@ -155,8 +162,16 @@ class SoulmateViewModel : ViewModel() {
         val user = auth.currentUser
         if (user == null) {
             loadedUid = null
+            presenceRepository.stopObserving()
+            presenceListening = false
+            privacySettingsLoaded = false
+            onlineUserIds = emptySet()
             clearRemoteState()
         } else if (loadedUid != user.uid) {
+            presenceRepository.stopObserving()
+            presenceListening = false
+            privacySettingsLoaded = false
+            onlineUserIds = emptySet()
             loadedUid = user.uid
             loadSignedInData(user.uid)
         }
@@ -224,7 +239,77 @@ class SoulmateViewModel : ViewModel() {
         firebaseAuth.removeAuthStateListener(authStateListener)
         dataLoadJob?.cancel()
         profileSaveJob?.cancel()
+        presenceSyncJob?.cancel()
+        presenceRepository.stopObserving()
         super.onCleared()
+    }
+
+    fun setAppInForeground(isForeground: Boolean) {
+        if (appInForeground == isForeground) return
+        appInForeground = isForeground
+        if (isForeground) {
+            startPresenceIfReady()
+        } else {
+            presenceRepository.stopObserving()
+            presenceListening = false
+            onlineUserIds = emptySet()
+            applyPresenceToUsers()
+            syncPresencePublication()
+        }
+    }
+
+    private fun startPresenceIfReady() {
+        if (!appInForeground || !privacySettingsLoaded || firebaseAuth.currentUser == null) return
+        if (!presenceListening) {
+            presenceListening = true
+            presenceRepository.startObserving(
+                onOnlineUsersChanged = { ids ->
+                    onlineUserIds = ids
+                    applyPresenceToUsers()
+                },
+                onError = ::reportDataError
+            )
+        }
+        syncPresencePublication()
+    }
+
+    private fun syncPresencePublication() {
+        presenceSyncJob?.cancel()
+        val shouldPublish = appInForeground &&
+            privacySettingsLoaded &&
+            _privacySettings.value.showOnlineStatus
+        presenceSyncJob = viewModelScope.launch {
+            try {
+                presenceRepository.setPublishingEnabled(shouldPublish)
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            }
+        }
+    }
+
+    private fun withPresence(user: User): User =
+        user.copy(isOnline = user.showOnlineStatus && user.id in onlineUserIds)
+
+    private fun applyPresenceToUsers() {
+        _availableProfiles.update { users -> users.map(::withPresence) }
+        _friendsList.update { users -> users.map(::withPresence) }
+        _blockedUsers.update { users -> users.map(::withPresence) }
+        _conversations.update { conversations ->
+            conversations.map { it.copy(user = withPresence(it.user)) }
+        }
+        _friendRequests.update { requests ->
+            requests.map { it.copy(user = withPresence(it.user)) }
+        }
+        _sentRequests.update { requests ->
+            requests.map { it.copy(user = withPresence(it.user)) }
+        }
+        _swipedHistory.update { users -> users.map(::withPresence) }
+        _usernameSearchResults.update { users -> users.map(::withPresence) }
+        _selectedUserProfile.update { it?.let(::withPresence) }
+        _matchedUser.update { it?.let(::withPresence) }
+        _selectedFriendRequest.update { it?.copy(user = withPresence(it.user)) }
+        _activeConversation.update { it?.copy(user = withPresence(it.user)) }
+        applyCurrentFilters()
     }
 
     private fun loadSignedInData(uid: String) {
@@ -260,6 +345,8 @@ class SoulmateViewModel : ViewModel() {
                 )
                 refreshDashboardData()
                 applyStoredSettings(repository.loadAllSettings())
+                privacySettingsLoaded = true
+                startPresenceIfReady()
                 applyCurrentFilters()
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
@@ -280,14 +367,16 @@ class SoulmateViewModel : ViewModel() {
     }
 
     private fun applyDashboardData(data: FirebaseDashboardData) {
-        _exploreDeck.value = data.exploreDeck
-        _availableProfiles.value = data.exploreDeck
+        _exploreDeck.value = data.exploreDeck.map(::withPresence)
+        _availableProfiles.value = data.exploreDeck.map(::withPresence)
         val blockedIds = data.blockedUsers.map { it.id }.toSet()
-        _conversations.value = data.conversations.filterNot { it.user.id in blockedIds }
-        _friendsList.value = data.friends.filterNot { it.id in blockedIds }
-        _friendRequests.value = data.friendRequests
-        _sentRequests.value = data.sentRequests
-        _blockedUsers.value = data.blockedUsers
+        _conversations.value = data.conversations
+            .filterNot { it.user.id in blockedIds }
+            .map { it.copy(user = withPresence(it.user)) }
+        _friendsList.value = data.friends.filterNot { it.id in blockedIds }.map(::withPresence)
+        _friendRequests.value = data.friendRequests.map { it.copy(user = withPresence(it.user)) }
+        _sentRequests.value = data.sentRequests.map { it.copy(user = withPresence(it.user)) }
+        _blockedUsers.value = data.blockedUsers.map(::withPresence)
         applyCurrentFilters()
     }
 
@@ -313,6 +402,7 @@ class SoulmateViewModel : ViewModel() {
         _notificationSettings.value = NotificationSettingsState()
         _availableProfiles.value = emptyList()
         _isProUser.value = false
+        privacySettingsLoaded = false
     }
 
     private fun reportDataError(exception: Exception) {
@@ -381,9 +471,19 @@ class SoulmateViewModel : ViewModel() {
     }
 
     fun signOut() {
-        firebaseAuth.signOut()
-        resetPhoneAuth()
-        _uiState.update { it.copy(isPhoneVerified = false, phoneNumber = "") }
+        presenceSyncJob?.cancel()
+        presenceRepository.stopObserving()
+        presenceListening = false
+        viewModelScope.launch {
+            try {
+                presenceRepository.setPublishingEnabled(false)
+                firebaseAuth.signOut()
+                resetPhoneAuth()
+                _uiState.update { it.copy(isPhoneVerified = false, phoneNumber = "") }
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            }
+        }
     }
 
     fun sendPhoneVerificationCode(
@@ -862,7 +962,7 @@ class SoulmateViewModel : ViewModel() {
     fun searchUsers(query: String) {
         viewModelScope.launch {
             try {
-                _usernameSearchResults.value = repository.searchProfiles(query)
+                _usernameSearchResults.value = repository.searchProfiles(query).map(::withPresence)
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
@@ -953,11 +1053,11 @@ class SoulmateViewModel : ViewModel() {
     }
 
     fun setSelectedUserProfile(user: User?) {
-        _selectedUserProfile.value = user
+        _selectedUserProfile.value = user?.let(::withPresence)
     }
 
     fun selectConversation(conversation: ChatConversation) {
-        _activeConversation.value = conversation
+        _activeConversation.value = conversation.copy(user = withPresence(conversation.user))
         viewModelScope.launch {
             try {
                 val messages = repository.loadMessages(conversation.id)
@@ -1166,6 +1266,7 @@ class SoulmateViewModel : ViewModel() {
 
     fun updatePrivacySettings(newState: PrivacySettingsState) {
         _privacySettings.value = newState
+        syncPresencePublication()
         viewModelScope.launch {
             try {
                 repository.savePrivacySettings(

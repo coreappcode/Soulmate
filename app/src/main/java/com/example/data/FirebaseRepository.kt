@@ -585,7 +585,10 @@ class FirebaseRepository(
             val profile = transaction.get(profileRef)
             transaction.set(settingsRef, values, SetOptions.merge())
             if (profile.exists()) {
-                val profileUpdate = mutableMapOf<String, Any>("showAge" to showAge)
+                val profileUpdate = mutableMapOf<String, Any>(
+                    "showAge" to showAge,
+                    "showOnlineStatus" to (values["showOnlineStatus"] as? Boolean ?: true)
+                )
                 profileUpdate["age"] = if (showAge) age else FieldValue.delete()
                 transaction.update(profileRef, profileUpdate)
             }
@@ -656,7 +659,8 @@ class FirebaseRepository(
         job = getString("job").orEmpty(),
         education = getString("education").orEmpty(),
         zodiac = getString("zodiac").orEmpty(),
-        ageVisible = getBoolean("showAge") != false
+        ageVisible = getBoolean("showAge") != false,
+        showOnlineStatus = getBoolean("showOnlineStatus") != false
     )
 
     private fun UserProfileState.toPublicMap(
@@ -686,6 +690,7 @@ class FirebaseRepository(
             "zodiac" to zodiac.trim(),
             "verified" to isFaceVerified,
             "isComplete" to complete,
+            "showOnlineStatus" to (privacySettings["showOnlineStatus"] as? Boolean ?: true),
             "updatedAt" to FieldValue.serverTimestamp()
         )
     }

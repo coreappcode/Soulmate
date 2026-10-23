@@ -77,7 +77,7 @@ fun PrivacySettingsScreen(
                 .padding(20.dp)
         ) {
             Text(
-                text = "Age visibility is enforced on public profiles. Online presence, distance display, non-friend messaging, and read receipts are not configured in this build.",
+                text = "Online status is shared while you are active if this setting is enabled. Age visibility is enforced on public profiles; distance display, non-friend messaging, and read receipts are not configured.",
                 fontFamily = InterFontFamily,
                 fontSize = 13.sp,
                 color = TextSecondary,

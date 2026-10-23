@@ -19,6 +19,7 @@ data class User(
     val education: String = "",
     val zodiac: String = "",
     val isOnline: Boolean = false,
+    val showOnlineStatus: Boolean = true,
     val isNew: Boolean = false,
     val ageVisible: Boolean = true
 ) {
