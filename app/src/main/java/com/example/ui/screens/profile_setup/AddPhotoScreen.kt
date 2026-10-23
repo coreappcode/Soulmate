@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -43,6 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.SoulTopBar
+import com.example.ui.components.GradientButton
+import com.example.ui.components.SoulTextButton
 import com.example.ui.theme.AppBackground
 import com.example.ui.theme.AuroraHorizontalGradient
 import com.example.ui.theme.BorderSubtle
@@ -63,6 +68,7 @@ fun AddPhotoScreen(
     val context = LocalContext.current
     var photoError by remember { mutableStateOf<String?>(null) }
     var cameraCaptureUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var croppedPhotoUri by rememberSaveable { mutableStateOf<String?>(null) }
 
     val cropImageLauncher = rememberLauncherForActivityResult(
         contract = CropImageContract()
@@ -71,7 +77,7 @@ fun AddPhotoScreen(
             val croppedUri = result.uriContent
             if (croppedUri != null) {
                 photoError = null
-                onPhotoAdded(croppedUri.toString())
+                croppedPhotoUri = croppedUri.toString()
             } else {
                 photoError = "The cropper did not return an image. Please try again."
             }
@@ -89,13 +95,17 @@ fun AddPhotoScreen(
                         fixAspectRatio = true,
                         aspectRatioX = 3,
                         aspectRatioY = 4,
-                        outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG
+                        outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG,
+                        backgroundColor = android.graphics.Color.BLACK,
+                        toolbarColor = android.graphics.Color.BLACK,
+                        toolbarTitleColor = android.graphics.Color.WHITE,
+                        toolbarBackButtonColor = android.graphics.Color.WHITE,
+                        toolbarTintColor = android.graphics.Color.WHITE
                     )
                 )
             )
         } catch (e: Exception) {
             photoError = e.localizedMessage ?: "Unable to crop photo."
-            onPhotoAdded(uri.toString())
         }
     }
 
@@ -118,68 +128,121 @@ fun AddPhotoScreen(
         }
     }
 
+    val isReviewingCrop = croppedPhotoUri != null
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppBackground)
+            .background(if (isReviewingCrop) Color.Black else AppBackground)
             .navigationBarsPadding()
             .testTag("add_photo_screen")
     ) {
-        SoulTopBar(
-            title = "Add Photo",
-            showBack = true,
-            onBackClick = onBack
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Choose photo source",
-                style = H3Style,
-                modifier = Modifier.padding(bottom = 32.dp)
+        if (!isReviewingCrop) {
+            SoulTopBar(
+                title = "Add Photo",
+                showBack = true,
+                onBackClick = onBack
             )
+        }
 
-            if (!photoError.isNullOrBlank()) {
+        if (croppedPhotoUri != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = photoError.orEmpty(),
-                    color = androidx.compose.ui.graphics.Color(0xFFB42318),
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    text = "Review your crop",
+                    color = Color.White,
+                    style = H3Style,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+
+                AsyncImage(
+                    model = croppedPhotoUri,
+                    contentDescription = "Cropped profile photo preview",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .testTag("cropped_photo_preview")
+                )
+
+                if (!photoError.isNullOrBlank()) {
+                    Text(
+                        text = photoError.orEmpty(),
+                        color = Color(0xFFFF8A80),
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
+
+                GradientButton(
+                    text = "Next",
+                    onClick = { croppedPhotoUri?.let(onPhotoAdded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp)
+                        .testTag("cropped_photo_next")
+                )
+                SoulTextButton(
+                    text = "Choose Another Photo",
+                    onClick = {
+                        croppedPhotoUri = null
+                        photoError = null
+                    },
+                    color = Color.White,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Choose photo source",
+                    style = H3Style,
+                    modifier = Modifier.padding(bottom = 32.dp)
+                )
 
-            // Card 1: Choose from Gallery (Android Photo Picker)
-            PhotoSourceCard(
-                title = "Choose from Gallery",
-                subtitle = "Pick photos from your device gallery",
-                icon = Icons.Default.PhotoLibrary,
-                onClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                if (!photoError.isNullOrBlank()) {
+                    Text(
+                        text = photoError.orEmpty(),
+                        color = Color(0xFFB42318),
+                        modifier = Modifier.padding(bottom = 16.dp)
                     )
-                },
-                tag = "gallery_photo_card"
-            )
+                }
 
-            Spacer(modifier = Modifier.height(20.dp))
+                PhotoSourceCard(
+                    title = "Choose from Gallery",
+                    subtitle = "Pick photos from your device gallery",
+                    icon = Icons.Default.PhotoLibrary,
+                    onClick = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    tag = "gallery_photo_card"
+                )
 
-            // Card 2: Take Photo
-            PhotoSourceCard(
-                title = "Take Photo",
-                subtitle = "Use camera to snap a fresh picture",
-                icon = Icons.Default.CameraAlt,
-                onClick = {
-                    photoError = null
-                    val uri = context.createCameraCaptureUri("profile_photo")
-                    cameraCaptureUri = uri
-                    takePictureLauncher.launchCameraCapture(uri) { photoError = it }
-                },
-                tag = "take_photo_card"
-            )
+                Spacer(modifier = Modifier.height(20.dp))
+
+                PhotoSourceCard(
+                    title = "Take Photo",
+                    subtitle = "Use camera to snap a fresh picture",
+                    icon = Icons.Default.CameraAlt,
+                    onClick = {
+                        photoError = null
+                        val uri = context.createCameraCaptureUri("profile_photo")
+                        cameraCaptureUri = uri
+                        takePictureLauncher.launchCameraCapture(uri) { photoError = it }
+                    },
+                    tag = "take_photo_card"
+                )
+            }
         }
     }
 }
