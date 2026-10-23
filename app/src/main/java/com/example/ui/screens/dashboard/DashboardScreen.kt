@@ -670,6 +670,7 @@ fun DashboardScreen(
                                         activeSubScreen = ActiveSubScreen.ChatThread(conv)
                                     },
                                     onLongPressConversation = { conv ->
+                                        viewModel.selectConversation(conv)
                                         activeSubScreen = ActiveSubScreen.ChatOptions(conv.user)
                                     },
                                     onNewChatClick = {
@@ -712,7 +713,12 @@ fun DashboardScreen(
                                     userProfile = userProfile,
                                     notificationSettings = notificationSettings,
                                     onTogglePush = { checked ->
-                                        viewModel.updateNotificationSettings(notificationSettings.copy(pushMatches = checked))
+                                        viewModel.updateNotificationSettings(
+                                            notificationSettings.copy(
+                                                pushMatches = checked,
+                                                pushMessages = checked
+                                            )
+                                        )
                                     },
                                     onToggleEmail = { checked ->
                                         viewModel.updateNotificationSettings(notificationSettings.copy(emailSummaries = checked))

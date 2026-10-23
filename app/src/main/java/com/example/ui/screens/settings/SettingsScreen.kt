@@ -244,7 +244,7 @@ fun SettingsScreen(
                     SettingsToggleRow(
                         icon = Icons.Default.Notifications,
                         title = "Push Notifications",
-                        checked = notificationSettings.pushMatches,
+                        checked = notificationSettings.pushMatches || notificationSettings.pushMessages,
                         onCheckedChange = onTogglePush
                     )
                     SettingsDivider()

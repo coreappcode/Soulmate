@@ -123,7 +123,7 @@ fun ChatListScreen(
         }
 
         if (filteredConversations.isEmpty()) {
-            // Empty state: illustration + "No chats yet" + Go to Explore CTA
+            val noConversations = conversations.isEmpty()
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -153,7 +153,7 @@ fun ChatListScreen(
                     Spacer(modifier = Modifier.height(18.dp))
 
                     Text(
-                        text = "No chats yet",
+                        text = if (noConversations) "No chats yet" else "No conversations found",
                         fontFamily = PoppinsFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp,
@@ -163,7 +163,11 @@ fun ChatListScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "Swipe right on soulmates to start conversations and make sparks fly!",
+                        text = if (noConversations) {
+                            "Swipe right on soulmates to start conversations and make sparks fly!"
+                        } else {
+                            "Try a different name, username, or message."
+                        },
                         fontFamily = InterFontFamily,
                         fontSize = 14.sp,
                         color = TextSecondary,
@@ -174,8 +178,14 @@ fun ChatListScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     GradientButton(
-                        text = "Go to Explore",
-                        onClick = onGoToExplore,
+                        text = if (noConversations) "Go to Explore" else "Clear Search",
+                        onClick = {
+                            if (noConversations) {
+                                onGoToExplore()
+                            } else {
+                                searchQuery = ""
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(0.7f)
                     )
                 }
