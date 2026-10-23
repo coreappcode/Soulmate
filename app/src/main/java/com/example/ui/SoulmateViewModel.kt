@@ -1009,11 +1009,13 @@ class SoulmateViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 repository.clearConversation(active.id)
-                val cleared = active.copy(messages = emptyList(), lastMessage = "")
+                val messages = repository.loadMessages(active.id)
+                val cleared = active.copy(messages = messages, lastMessage = "")
                 _activeConversation.value = cleared
                 _conversations.update { items ->
                     items.map { if (it.id == cleared.id) cleared else it }
                 }
+                refreshDashboardData()
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
@@ -1052,6 +1054,16 @@ class SoulmateViewModel : ViewModel() {
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
+        }
+    }
+
+    suspend fun submitUserReport(targetId: String, reason: String, details: String): Boolean {
+        return try {
+            repository.submitUserReport(targetId, reason, details)
+            true
+        } catch (exception: Exception) {
+            reportDataError(exception)
+            false
         }
     }
 

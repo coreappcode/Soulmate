@@ -370,10 +370,18 @@ class FirebaseRepository(
 
     suspend fun loadMessages(conversationId: String): List<ChatMessage> {
         val uid = requireCurrentUid()
-        return firestore.collection("conversations").document(conversationId)
+        val clearedAt = firestore.collection("users").document(uid)
+            .collection("settings").document("chatHistory")
+            .get().await().getTimestamp("clearedAt.$conversationId")
+        val messages = firestore.collection("conversations").document(conversationId)
             .collection("messages")
             .orderBy("createdAt", Query.Direction.ASCENDING)
-            .get().await().documents.map { message ->
+        val visibleMessages = if (clearedAt == null) {
+            messages
+        } else {
+            messages.whereGreaterThan("createdAt", clearedAt)
+        }
+        return visibleMessages.get().await().documents.map { message ->
                 ChatMessage(
                     id = message.id,
                     text = message.getString("text").orEmpty(),
@@ -421,16 +429,17 @@ class FirebaseRepository(
     }
 
     suspend fun clearConversation(conversationId: String) {
-        val messages = firestore.collection("conversations").document(conversationId)
-            .collection("messages").get().await().documents
-        messages.chunked(450).forEach { chunk ->
-            firestore.batch().also { batch ->
-                chunk.forEach { message -> batch.delete(message.reference) }
-                batch.commit().await()
-            }
+        val uid = requireCurrentUid()
+        val conversation = firestore.collection("conversations").document(conversationId).get().await()
+        require(conversation.exists() && uid in conversation.get("userIds").stringList()) {
+            "This conversation is no longer available."
         }
-        firestore.collection("conversations").document(conversationId)
-            .update("lastMessage", "", "updatedAt", FieldValue.serverTimestamp()).await()
+        firestore.collection("users").document(uid)
+            .collection("settings").document("chatHistory")
+            .set(
+                mapOf("clearedAt" to mapOf(conversationId to FieldValue.serverTimestamp())),
+                SetOptions.merge()
+            ).await()
     }
 
     suspend fun archiveConversation(conversationId: String) {
@@ -532,6 +541,31 @@ class FirebaseRepository(
             .document(targetId).delete().await()
     }
 
+    suspend fun submitUserReport(targetId: String, reason: String, details: String) {
+        val uid = requireCurrentUid()
+        require(targetId.isNotBlank() && targetId != uid) { "You cannot report this profile." }
+        require(reason in setOf(
+            "Inappropriate content",
+            "Harassment or bullying",
+            "Scam or fraud",
+            "Fake profile",
+            "Spam",
+            "Other"
+        )) { "Choose a valid report reason." }
+        require(details.length <= 500) { "Report details must be 500 characters or fewer." }
+
+        firestore.collection("reports").document().set(
+            mapOf(
+                "reporterId" to uid,
+                "targetId" to targetId,
+                "reason" to reason,
+                "details" to details,
+                "status" to "open",
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
     suspend fun saveSettings(collection: String, values: Map<String, Any>) {
         val uid = requireCurrentUid()
         firestore.collection("users").document(uid).collection("settings")
@@ -576,16 +610,23 @@ class FirebaseRepository(
             .whereArrayContains("userIds", uid)
             .orderBy("updatedAt", Query.Direction.DESCENDING)
             .get().await()
+        val chatHistory = firestore.collection("users").document(uid)
+            .collection("settings").document("chatHistory").get().await()
         return snapshots.documents
             .filterNot { uid in it.get("archivedBy").stringList() }
             .mapNotNull { snapshot ->
                 val otherId = snapshot.get("userIds").stringList().firstOrNull { it != uid }
                     ?: return@mapNotNull null
+                val updatedAt = snapshot.getTimestamp("updatedAt")
+                val clearedAt = chatHistory.getTimestamp("clearedAt.${snapshot.id}")
+                val historyWasCleared = updatedAt != null &&
+                    clearedAt != null &&
+                    updatedAt.compareTo(clearedAt) <= 0
                 getPublicUser(otherId)?.let { user ->
                     ChatConversation(
                         id = snapshot.id,
                         user = user,
-                        lastMessage = snapshot.getString("lastMessage").orEmpty(),
+                        lastMessage = if (historyWasCleared) "" else snapshot.getString("lastMessage").orEmpty(),
                         timestamp = snapshot.getTimestamp("updatedAt").formatTime()
                     )
                 }

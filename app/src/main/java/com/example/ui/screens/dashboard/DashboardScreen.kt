@@ -32,6 +32,7 @@ import com.example.ui.screens.chats.ChatInfoScreen
 import com.example.ui.screens.chats.ChatListScreen
 import com.example.ui.screens.chats.ChatOptionsScreen
 import com.example.ui.screens.chats.ChatThreadScreen
+import com.example.ui.screens.chats.ReportUserScreen
 import com.example.ui.screens.chats.SendAttachmentScreen
 import com.example.ui.screens.explore.ExploreScreen
 import com.example.ui.screens.explore.FiltersScreen
@@ -78,6 +79,7 @@ sealed interface ActiveSubScreen {
     data class ChatThread(val conversation: ChatConversation) : ActiveSubScreen
     data class ChatOptions(val user: User) : ActiveSubScreen
     data class ChatInfo(val user: User) : ActiveSubScreen
+    data class ReportUser(val user: User) : ActiveSubScreen
     data object ChatAttachment : ActiveSubScreen
     data object BlockedUsers : ActiveSubScreen
 
@@ -280,7 +282,7 @@ fun DashboardScreen(
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onReportUser = {
-                            Toast.makeText(context, "Reporting is not configured. This user was not blocked.", Toast.LENGTH_LONG).show()
+                            activeSubScreen = ActiveSubScreen.ReportUser(sub.user)
                         },
                         onDeleteChat = {
                             viewModel.deleteActiveChat()
@@ -307,8 +309,17 @@ fun DashboardScreen(
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onReportClick = {
-                            viewModel.blockUser(sub.user)
-                            activeSubScreen = ActiveSubScreen.None
+                            activeSubScreen = ActiveSubScreen.ReportUser(sub.user)
+                        },
+                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                    )
+                }
+
+                is ActiveSubScreen.ReportUser -> {
+                    ReportUserScreen(
+                        user = sub.user,
+                        onSubmit = { reason, details ->
+                            viewModel.submitUserReport(sub.user.id, reason, details)
                         },
                         onBack = { activeSubScreen = ActiveSubScreen.None }
                     )

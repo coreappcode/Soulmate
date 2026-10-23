@@ -365,7 +365,10 @@ The application consists of **56 complete UI screens** organized into 9 logical 
   - Back Button → returns to Chat Thread.
   - "View Profile" → opens `FullProfileScreen`.
   - "Shared Media & Files" → opens `ChatInfoScreen`.
-  - "Block User" / "Report User" → blocks user in ViewModel and returns to Chat List.
+  - "Clear Chat History" hides existing messages only for the signed-in user; the other participant's history is unchanged.
+  - "Block User" → blocks the user and returns to Chat List.
+  - "Report User" → submits a report to the private Firestore `reports` collection. Reports are not readable by clients and require a separately configured moderation review process.
+  - "Mute Notifications" and audio/video calling remain unavailable until their provider integrations are configured.
 - **Buttons:** Action list items.
 - **Icons:** `Icons.Default.Person`, `Icons.Default.NotificationsOff`, `Icons.Default.Block`, `Icons.Default.Report`, `Icons.Default.Delete`.
 
@@ -797,14 +800,15 @@ The app uses Firebase Authentication, Cloud Firestore, and Firebase Storage for 
 | **SMS OTP Verification** | `PhoneEntryScreen.kt`, `OtpVerifyScreen.kt`, `PhoneNumberScreen.kt` | Firebase Phone Auth sends/resends the SMS, signs the user in with the verified credential, and updates an existing account phone only after OTP verification. Firebase uses Play Integrity when eligible and can fall back to reCAPTCHA; the Android SDK does not provide a production option to disable that fallback. | Enable Phone sign-in; register the Play app-signing SHA-256 for Play Integrity and SHA-1 for reCAPTCHA fallback. Install through Google Play and use a supported device to avoid the web fallback where possible. |
 | **Profile and username claims** | Onboarding and profile screens | Draft/private data and public profiles are stored in Firestore; username claims are transactional. | Firestore rules and indexes are deployed; re-deploy after changes. |
 | **Peer-to-peer chat** | `ChatThreadScreen.kt`, `SendAttachmentScreen.kt` | Messages and conversations use Firestore; supported attachments upload to Storage. | Firestore/Storage rules and indexes are deployed; re-deploy after changes. |
-| **Friends and matchmaking** | Explore and Friends screens | Swipes, matches, friend requests, friendships, blocks, and settings use Firestore. | Location-distance ranking, live presence, and moderation are not configured. |
+| **Friends and matchmaking** | Explore and Friends screens | Swipes, matches, friend requests, friendships, blocks, and settings use Firestore. | Location-distance ranking and live presence are not configured. |
+| **User reports** | Chat Info and Chat Options screens | Reports are stored in the private Firestore `reports` collection. Reporters cannot read or modify submitted reports. | A moderation review interface/process is not configured; reports are not automatically reviewed. |
 | **Identity verification** | `FaceCaptureScreen.kt`, `VerificationStatusScreen.kt` | A selfie can be stored privately; the UI never marks it verified. | A real identity-review provider is not configured. |
 | **In-App Billing** | `ProPlansScreen.kt` | Purchases and restore are explicitly unavailable; no subscription is activated. | Google Play Billing and Play Console products are not configured. |
 | **Account deletion** | `DeleteAccountScreen.kt` | The screen states that deletion is unavailable and makes no account changes. | A secure deletion backend is not configured. |
 
 Before testing SMS sign-in, confirm **Phone** is enabled under Firebase Console → Authentication → Sign-in method. The local debug certificate's SHA-1 and SHA-256 are registered for `com.soulmate.androidapp`; add the Play app-signing SHA-256 fingerprint for Play Integrity and SHA-1 for the reCAPTCHA fallback. The Android Firebase config must be available as `app/google-services.json`. Use Firebase Authentication test phone numbers during development to avoid sending real SMS messages. Firebase may open its reCAPTCHA web flow when app verification cannot use Play Integrity; this fallback cannot be disabled in production while retaining Firebase Phone Auth.
 
-Run `firebase emulators:exec --only auth,firestore,storage --project demo-soulmate "node scripts/firebase-rules-smoke.mjs"` to validate authenticated draft/profile/username writes, private-document access controls, age-visibility updates, and profile image Storage rules without modifying production data.
+Run `firebase emulators:exec --only auth,firestore,storage --project demo-soulmate "node scripts/firebase-rules-smoke.mjs"` to validate authenticated draft/profile/username writes, private-document access controls, report submission/privacy, age-visibility updates, and profile image Storage rules without modifying production data. The script removes only its own mutable fixtures and Auth user; the unmodifiable report test fixture is discarded when the emulator shuts down.
 
 ---
 

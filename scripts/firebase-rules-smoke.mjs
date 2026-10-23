@@ -6,7 +6,7 @@ const firestoreEmulator = process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8080
 const storageEmulator = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? "127.0.0.1:9199";
 const config = JSON.parse(await readFile(new URL("../app/google-services.json", import.meta.url), "utf8"));
 const apiKey = config.client.find(
-  (client) => client.client_info.android_client_info.package_name === "com.soulmate.android"
+  (client) => client.client_info.android_client_info.package_name === "com.soulmate.androidapp"
 )?.api_key[0].current_key;
 
 if (!apiKey) throw new Error("Firebase config is missing the requested Android app registration.");
@@ -20,6 +20,7 @@ let idToken;
 let userId;
 let storageObjectUrl;
 let result = "not run";
+let cleanupFailed = false;
 
 async function request(url, { method = "GET", body, token = idToken, contentType = "application/json" } = {}) {
   const headers = {};
@@ -182,6 +183,56 @@ try {
   const forbiddenRead = await request(`${docRoot}/users/another-test-uid`);
   assertStatus("Deny another user's private draft", forbiddenRead, 403);
 
+  const reportId = `audit_${userId}`;
+  const report = await request(`${docRoot}:commit`, {
+    method: "POST",
+    body: {
+      writes: [
+        {
+          update: {
+            name: `${resourceRoot}/reports/${reportId}`,
+            fields: {
+              reporterId: { stringValue: userId },
+              targetId: { stringValue: "another-test-uid" },
+              reason: { stringValue: "Spam" },
+              details: { stringValue: "Synthetic report rules test." },
+              status: { stringValue: "open" }
+            }
+          },
+          currentDocument: { exists: false },
+          updateTransforms: [{ fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" }]
+        }
+      ]
+    }
+  });
+  assertStatus("Submit report", report, 200);
+
+  const reportRead = await request(`${docRoot}/reports/${reportId}`);
+  assertStatus("Deny reporter access to report queue", reportRead, 403);
+
+  const selfReport = await request(`${docRoot}:commit`, {
+    method: "POST",
+    body: {
+      writes: [
+        {
+          update: {
+            name: `${resourceRoot}/reports/self_${userId}`,
+            fields: {
+              reporterId: { stringValue: userId },
+              targetId: { stringValue: userId },
+              reason: { stringValue: "Spam" },
+              details: { stringValue: "" },
+              status: { stringValue: "open" }
+            }
+          },
+          currentDocument: { exists: false },
+          updateTransforms: [{ fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" }]
+        }
+      ]
+    }
+  });
+  assertStatus("Deny self-report", selfReport, 403);
+
   const image = Buffer.from(
     "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=",
     "base64"
@@ -208,16 +259,44 @@ try {
     const deleteObject = await request(storageObjectUrl, { method: "DELETE" });
     if (![200, 204, 404].includes(deleteObject.response.status)) {
       console.error(`Cleanup failed for emulator storage object (${deleteObject.response.status}).`);
+      cleanupFailed = true;
     }
   }
-  const clearAuthEmulator = await fetch(
-    `http://${authEmulator}/emulator/v1/projects/${projectId}/accounts`,
-    { method: "DELETE" }
-  );
-  if (![200, 204].includes(clearAuthEmulator.status)) {
-    console.error(`Cleanup failed for emulator auth users (${clearAuthEmulator.status}).`);
+  if (userId && idToken) {
+    const cleanupWrites = [
+      `users/${userId}/settings/privacy`,
+      `profiles/${userId}`,
+      `users/${userId}`,
+      `usernames/audit_${userId}`
+    ].map((path) => ({ delete: `${resourceRoot}/${path}` }));
+    const clearFirestore = await request(`${docRoot}:commit`, {
+      method: "POST",
+      body: { writes: cleanupWrites }
+    });
+    if (clearFirestore.response.status !== 200) {
+      console.error(`Cleanup failed for emulator Firestore documents (${clearFirestore.response.status}).`);
+      cleanupFailed = true;
+    }
+  }
+  if (idToken) {
+    const deleteAuthUser = await request(
+      `http://${authEmulator}/identitytoolkit.googleapis.com/v1/accounts:delete?key=${apiKey}`,
+      { method: "POST", token: "", body: { idToken } }
+    );
+    if (![200, 204].includes(deleteAuthUser.response.status)) {
+      console.error(
+        `Cleanup failed for the smoke-test auth user (${deleteAuthUser.response.status}): ` +
+        `${JSON.stringify(deleteAuthUser.data)}`
+      );
+      cleanupFailed = true;
+    }
   }
 }
 
-if (result !== "passed") process.exitCode = 1;
-console.log("Firebase Auth/Firestore/Storage rules smoke test passed; emulator-only test data was cleared.");
+if (result !== "passed" || cleanupFailed) process.exitCode = 1;
+if (result === "passed" && !cleanupFailed) {
+  console.log(
+    "Firebase Auth/Firestore/Storage rules smoke test passed; mutable fixtures were cleared. " +
+    "The immutable report fixture is discarded when the emulator shuts down."
+  );
+}

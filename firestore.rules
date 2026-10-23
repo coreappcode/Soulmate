@@ -152,5 +152,28 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if signedIn() && request.auth.uid in resource.data.userIds;
     }
+
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'reporterId', 'targetId', 'reason', 'details', 'status', 'createdAt'
+        ])
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.targetId is string
+        && request.resource.data.targetId != request.auth.uid
+        && request.resource.data.reason in [
+          'Inappropriate content',
+          'Harassment or bullying',
+          'Scam or fraud',
+          'Fake profile',
+          'Spam',
+          'Other'
+        ]
+        && request.resource.data.details is string
+        && request.resource.data.details.size() <= 500
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
   }
 }

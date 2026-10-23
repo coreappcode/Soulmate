@@ -225,7 +225,11 @@ fun ChatThreadScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = {
-                            Toast.makeText(context, "Calling ${user.name}...", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                "Video calls are not available yet.",
+                                Toast.LENGTH_LONG
+                            ).show()
                         },
                         modifier = Modifier.size(40.dp)
                     ) {
