@@ -63,9 +63,9 @@ fun EditBasicInfoScreen(
     onBack: () -> Unit
 ) {
     var name by remember { mutableStateOf(currentName) }
-    var dob by remember { mutableStateOf(currentDob) }
-    var gender by remember { mutableStateOf(currentGender.ifBlank { "Woman" }) }
-    var city by remember { mutableStateOf(currentCity.ifBlank { "Mumbai" }) }
+    var dob by remember(currentDob) { mutableStateOf(currentDob) }
+    var gender by remember { mutableStateOf(currentGender) }
+    var city by remember { mutableStateOf(currentCity) }
 
     val isNameValid = Validators.isValidName(name)
     val canSave = isNameValid && dob.isNotBlank() && gender.isNotBlank()

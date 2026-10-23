@@ -50,6 +50,7 @@ import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.utils.Constants
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -64,22 +65,19 @@ fun EditAboutScreen(
     var selectedInterests by remember { mutableStateOf(currentInterests) }
     var selectedLookingFor by remember { mutableStateOf(currentLookingFor) }
 
-    val allInterests = listOf(
-        "Coffee", "Music", "Travel", "Photography", "Design",
-        "Cooking", "Art", "Yoga", "Fitness", "Movies",
-        "Reading", "Tech", "Dancing", "Pets", "Gaming",
-        "Nature", "Wine", "Food", "Fashion", "Sports"
+    val allInterests = (Constants.PRESET_INTERESTS + currentInterests).distinct()
+    val lookingForDescriptions = mapOf(
+        "Men" to "Looking to meet men",
+        "Women" to "Looking to meet women",
+        "Non-binary" to "Looking to meet non-binary people",
+        "All" to "Open to people of all genders"
     )
-
-    val lookingForOptions = listOf(
-        "Relationship" to "Looking for something long-term and meaningful",
-        "Casual Dating" to "Fun dates and getting to know great people",
-        "New Friends" to "Expanding my social circle and community",
-        "Not Sure Yet" to "Open to whatever genuine connection comes along"
-    )
+    val lookingForOptions = Constants.LOOKING_FOR_OPTIONS.map { option ->
+        option to lookingForDescriptions.getValue(option)
+    }
 
     val scrollState = rememberScrollState()
-    val canSave = selectedInterests.size in 3..10 && selectedLookingFor.isNotEmpty()
+    val canSave = selectedInterests.size in 1..10 && selectedLookingFor.size == 1
 
     Column(
         modifier = Modifier
@@ -156,10 +154,10 @@ fun EditAboutScreen(
                     color = TextPrimary
                 )
                 Text(
-                    text = "${selectedInterests.size}/10 selected (min 3)",
+                    text = "${selectedInterests.size}/10 selected (min 1)",
                     fontFamily = InterFontFamily,
                     fontSize = 12.sp,
-                    color = if (selectedInterests.size < 3) Color.Red else OrchidPrimary
+                    color = if (selectedInterests.isEmpty()) Color.Red else OrchidPrimary
                 )
             }
 
@@ -190,7 +188,7 @@ fun EditAboutScreen(
 
             // Looking For 4-card multi-select
             Text(
-                text = "Looking For",
+                text = "Who Are You Looking For?",
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
@@ -198,7 +196,7 @@ fun EditAboutScreen(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Select what you're hoping to find on Soulmate.",
+                text = "Choose the genders you'd like to meet.",
                 fontFamily = InterFontFamily,
                 fontSize = 13.sp,
                 color = TextSecondary
@@ -220,11 +218,7 @@ fun EditAboutScreen(
                                 shape = RoundedCornerShape(16.dp)
                             )
                             .clickable {
-                                selectedLookingFor = if (isSelected) {
-                                    if (selectedLookingFor.size > 1) selectedLookingFor - title else selectedLookingFor
-                                } else {
-                                    selectedLookingFor + title
-                                }
+                                selectedLookingFor = listOf(title)
                             }
                             .padding(16.dp)
                             .testTag("looking_for_${title.lowercase().replace(" ", "_")}")

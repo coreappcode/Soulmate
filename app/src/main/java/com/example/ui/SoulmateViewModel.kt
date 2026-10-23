@@ -251,6 +251,9 @@ class SoulmateViewModel : ViewModel() {
                         phoneNumber = authPhone.removePrefix(country.dialCode)
                     )
                 }
+                if (!profile.isOnboardingComplete) {
+                    repository.saveDraft(profile)
+                }
                 _uiState.value = profile.copy(
                     isPhoneVerified = firebaseAuth.currentUser?.phoneNumber != null,
                     isProfileLoading = false
@@ -664,6 +667,18 @@ class SoulmateViewModel : ViewModel() {
     }
 
     fun updateBio(bio: String) = updateProfile { it.copy(bio = bio) }
+    fun updateAboutPreferences(
+        bio: String,
+        interests: List<String>,
+        lookingFor: List<String>
+    ) = updateProfile {
+        it.copy(
+            bio = bio,
+            selectedInterests = interests,
+            selectedLookingFor = lookingFor
+        )
+    }
+
     fun updateCity(city: String) = updateProfile { it.copy(city = city) }
     fun updateHeight(height: String) = updateProfile { it.copy(height = height) }
     fun updateJob(job: String) = updateProfile { it.copy(job = job) }

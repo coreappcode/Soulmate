@@ -159,7 +159,7 @@ fun AboutYouScreen(
 
             OutlinedTextField(
                 value = bio,
-                onValueChange = { if (it.length <= 600) onBioChange(it) },
+                onValueChange = { if (it.length <= 500) onBioChange(it) },
                 placeholder = {
                     Text(
                         text = "A quick snippet about your passions, quirks, and dream Sunday afternoon... (min 10 characters)",

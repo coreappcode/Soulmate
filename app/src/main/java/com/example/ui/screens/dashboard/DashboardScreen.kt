@@ -582,9 +582,7 @@ fun DashboardScreen(
                         currentInterests = userProfile.selectedInterests,
                         currentLookingFor = userProfile.selectedLookingFor,
                         onSave = { bio, interests, lookingFor ->
-                            viewModel.updateBio(bio)
-                            interests.forEach { viewModel.toggleInterest(it) }
-                            lookingFor.forEach { viewModel.toggleLookingFor(it) }
+                            viewModel.updateAboutPreferences(bio, interests, lookingFor)
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onBack = { activeSubScreen = ActiveSubScreen.None }

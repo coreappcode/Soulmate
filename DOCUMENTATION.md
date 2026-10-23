@@ -6,7 +6,7 @@
 
 - **Application Name:** Soulmate
 - **Kotlin Namespace:** `com.example`
-- **Android Application ID:** `com.soulmate.android`
+- **Android Application ID:** `com.soulmate.androidapp`
 - **Architecture:** Single-Activity MVVM (Model-View-ViewModel) built 100% in Kotlin & Jetpack Compose
 - **Design System:** Custom Material Design 3 (M3) "Aurora Warm" Design System with Edge-to-Edge system insets
 - **Header & Navbar Theme:** Tinder-Model Iconic Pink (`#FD3A73`) for all Top App Bar headers and Bottom Navigation Bar tabs
@@ -17,7 +17,7 @@
 
 ### Firebase Backend Connections and Work Completed
 
-- **Firebase project:** `soulmate-e285e`; the Android app registered for this package is `com.soulmate.android`. Firebase configuration is checked in at the repository root and in `app/google-services.json`; both copies must remain synchronized.
+- **Firebase project:** `soulmate-e285e`; the Android app registered for this package is `com.soulmate.androidapp`. Firebase configuration is checked in at the repository root and in `app/google-services.json`; both copies must remain synchronized.
 - **Authentication:** Firebase Phone Authentication sends and verifies SMS OTPs. The verified Firebase credential signs in the user; changing an existing account's phone number also requires OTP verification. The app supplies its Activity to Firebase Auth. Firebase chooses app verification: Play Integrity on eligible Google Play installations, with reCAPTCHA as an SDK fallback when Play Integrity is unavailable. There is no supported production setting to disable this fallback while continuing to use Firebase Phone Auth.
 - **Firestore:** `FirebaseRepository` is the app's data boundary. Private profile data and onboarding drafts are stored under `users/{uid}`; public discovery profiles under `profiles/{uid}`; normalized username claims under `usernames/{username}`; user preferences under `users/{uid}/settings`; blocks under `users/{uid}/blocks`. Swipes, matches, friend requests, friendships, conversations, and conversation messages use their corresponding top-level collections, with messages nested under each conversation.
 - **Profile privacy:** Public profiles omit age when the owner disables age visibility. Discovery, friend, profile, and chat displays use the privacy-aware age labels. The other privacy toggles are stored but are not enforced because online presence, distance visibility, non-friend messaging controls, and read receipts are not implemented.
@@ -25,7 +25,7 @@
 - **Backend deployment:** `firebase.json` points to `firestore.rules`, `firestore.indexes.json`, and `storage.rules`. Firestore rules and indexes and Storage rules were deployed to `soulmate-e285e` on October 22, 2026. Redeploy them whenever these checked-in deployment files change.
 - **Mock-flow cleanup:** Removed seeded mock data and simulated identity-verification completion. A captured selfie is stored privately and does not grant a verified badge. Billing, account deletion/deactivation, data export, live presence, precise-distance matching, push/email delivery, and moderation are not backed by configured services and are presented as unavailable or limited.
 - **Device integrations:** Onboarding uses actual Android runtime permission results. Photo selection uses the Android Photo Picker; camera capture uses the system camera with a FileProvider; profile cropping is performed before upload.
-- **Setup and validation notes:** Enable Phone sign-in in Firebase Authentication. Register the Play app-signing SHA-256 fingerprint for Play Integrity; register SHA-1 as required for the reCAPTCHA fallback. The Play app-signing fingerprint has not been registered. Use a Google Play-installed build on a Play Integrity-supported device to minimize browser verification; sideloaded builds and devices without Google Play services can still use Firebase's web fallback.
+- **Setup and validation notes:** Phone sign-in is enabled in Firebase Authentication. The local debug certificate's SHA-1 and SHA-256 are registered for this Android app. The Play app-signing SHA-256 still must be registered for Play Integrity; add the Play app-signing SHA-1 as well for the reCAPTCHA fallback. Use a Google Play-installed build on a Play Integrity-supported device to minimize browser verification; sideloaded builds and devices without Google Play services can still use Firebase's web fallback.
 - **Release signing:** Keep the release keystore out of Git. Supply `KEYSTORE_PATH`, `STORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` through a secure local environment or CI secret store when building a signed release. These values are not embedded in the project.
 
 ---
@@ -802,7 +802,9 @@ The app uses Firebase Authentication, Cloud Firestore, and Firebase Storage for 
 | **In-App Billing** | `ProPlansScreen.kt` | Purchases and restore are explicitly unavailable; no subscription is activated. | Google Play Billing and Play Console products are not configured. |
 | **Account deletion** | `DeleteAccountScreen.kt` | The screen states that deletion is unavailable and makes no account changes. | A secure deletion backend is not configured. |
 
-Before testing SMS sign-in, confirm **Phone** is enabled under Firebase Console → Authentication → Sign-in method. Add the Play app-signing SHA-256 fingerprint to the Android app registration for Play Integrity and SHA-1 for the reCAPTCHA fallback. These fingerprints were not registered during this work. The Android Firebase config must be available as `app/google-services.json`. Use Firebase Authentication test phone numbers during development to avoid sending real SMS messages. Firebase may open its reCAPTCHA web flow when app verification cannot use Play Integrity; this fallback cannot be disabled in production while retaining Firebase Phone Auth.
+Before testing SMS sign-in, confirm **Phone** is enabled under Firebase Console → Authentication → Sign-in method. The local debug certificate's SHA-1 and SHA-256 are registered for `com.soulmate.androidapp`; add the Play app-signing SHA-256 fingerprint for Play Integrity and SHA-1 for the reCAPTCHA fallback. The Android Firebase config must be available as `app/google-services.json`. Use Firebase Authentication test phone numbers during development to avoid sending real SMS messages. Firebase may open its reCAPTCHA web flow when app verification cannot use Play Integrity; this fallback cannot be disabled in production while retaining Firebase Phone Auth.
+
+Run `firebase emulators:exec --only auth,firestore,storage --project demo-soulmate "node scripts/firebase-rules-smoke.mjs"` to validate authenticated draft/profile/username writes, private-document access controls, age-visibility updates, and profile image Storage rules without modifying production data.
 
 ---
 
