@@ -36,9 +36,9 @@
         </provider>
         <activity
             android:name="com.canhub.cropper.CropImageActivity"
-            android:exported="true"
+            android:exported="false"
             tools:replace="android:exported"
-            android:theme="@style/Theme.MyApplication" />
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
