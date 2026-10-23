@@ -79,17 +79,22 @@ fun AddPhotoScreen(
     }
 
     fun cropPhoto(uri: Uri) {
-        cropImageLauncher.launch(
-            CropImageContractOptions(
-                uri = uri,
-                cropImageOptions = CropImageOptions(
-                    fixAspectRatio = true,
-                    aspectRatioX = 3,
-                    aspectRatioY = 4,
-                    outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG
+        try {
+            cropImageLauncher.launch(
+                CropImageContractOptions(
+                    uri = uri,
+                    cropImageOptions = CropImageOptions(
+                        fixAspectRatio = true,
+                        aspectRatioX = 3,
+                        aspectRatioY = 4,
+                        outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG
+                    )
                 )
             )
-        )
+        } catch (e: Exception) {
+            photoError = e.localizedMessage ?: "Unable to crop photo."
+            onPhotoAdded(uri.toString())
+        }
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(

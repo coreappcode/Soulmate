@@ -39,10 +39,11 @@ class FirebaseRepository(
         currentUid ?: throw IllegalStateException("Sign in before accessing your profile.")
 
     suspend fun isUsernameAvailable(username: String): Boolean {
-        val uid = requireCurrentUid()
+        val uid = currentUid
         val normalized = username.trim().lowercase(Locale.ROOT)
+        if (normalized.isBlank()) return false
         val snapshot = firestore.collection("usernames").document(normalized).get().await()
-        return !snapshot.exists() || snapshot.getString("uid") == uid
+        return !snapshot.exists() || (uid != null && snapshot.getString("uid") == uid)
     }
 
     suspend fun saveDraft(profile: UserProfileState) {
@@ -140,6 +141,9 @@ class FirebaseRepository(
     }
 
     suspend fun uploadProfilePhoto(uri: Uri): String {
+        if (uri.scheme == "http" || uri.scheme == "https") {
+            return uri.toString()
+        }
         val uid = requireCurrentUid()
         val imageRef = storage.reference.child("users/$uid/profile/${UUID.randomUUID()}.jpg")
         imageRef.putFile(
@@ -154,6 +158,9 @@ class FirebaseRepository(
     }
 
     suspend fun uploadVerificationSelfie(uri: Uri): String {
+        if (uri.scheme == "http" || uri.scheme == "https") {
+            return uri.toString()
+        }
         val uid = requireCurrentUid()
         val imageRef = storage.reference.child("users/$uid/verification/${UUID.randomUUID()}.jpg")
         imageRef.putFile(
