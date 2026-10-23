@@ -26,11 +26,10 @@ android {
   // and updating Android apps in AI Studio.
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/soulmate-release.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD") ?: "soulmatepassword"
-      keyAlias = System.getenv("KEY_ALIAS") ?: "soulmate"
-      keyPassword = System.getenv("KEY_PASSWORD") ?: "soulmatepassword"
+      System.getenv("KEYSTORE_PATH")?.let { storeFile = file(it) }
+      storePassword = System.getenv("STORE_PASSWORD")
+      keyAlias = System.getenv("KEY_ALIAS")
+      keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
       val localKeystore = file("${rootDir}/debug.keystore")
