@@ -170,6 +170,7 @@ private data class NavItemData(
 fun SoulBottomNav(
     currentRoute: String,
     onNavigate: (String) -> Unit,
+    chatUnreadCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
@@ -184,7 +185,9 @@ fun SoulBottomNav(
             label = "Chats",
             selectedIcon = Icons.Filled.ChatBubble,
             unselectedIcon = Icons.Outlined.ChatBubbleOutline,
-            badgeCount = "3"
+            badgeCount = chatUnreadCount.takeIf { it > 0 }?.let { count ->
+                if (count > 99) "99+" else count.toString()
+            }
         ),
         NavItemData(
             route = Routes.DASHBOARD_FRIENDS,

@@ -161,6 +161,7 @@ fun DashboardScreen(
 
     // Handle back button for any active sub-screen
     BackHandler(enabled = activeSubScreen !is ActiveSubScreen.None) {
+        viewModel.closeActiveConversation()
         activeSubScreen = ActiveSubScreen.None
     }
 
@@ -170,6 +171,7 @@ fun DashboardScreen(
             if (activeSubScreen is ActiveSubScreen.None) {
                 SoulBottomNav(
                     currentRoute = currentTab,
+                    chatUnreadCount = conversations.sumOf { it.unreadCount },
                     onNavigate = { newRoute ->
                         currentTab = newRoute
                         activeSubScreen = ActiveSubScreen.None
@@ -198,7 +200,9 @@ fun DashboardScreen(
                             viewModel.updateFilters(it)
                             activeSubScreen = ActiveSubScreen.None
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = {
+                            activeSubScreen = ActiveSubScreen.None
+                        }
                     )
                 }
 
@@ -260,6 +264,7 @@ fun DashboardScreen(
                         onSendMessage = { text ->
                             viewModel.sendMessage(text)
                         },
+                        onTypingChanged = viewModel::updateChatTyping,
                         onOpenAttachment = {
                             activeSubScreen = ActiveSubScreen.ChatAttachment
                         },
@@ -269,7 +274,10 @@ fun DashboardScreen(
                         onOpenOptions = {
                             activeSubScreen = ActiveSubScreen.ChatOptions(activeConv.user)
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = {
+                            viewModel.closeActiveConversation()
+                            activeSubScreen = ActiveSubScreen.None
+                        }
                     )
                 }
 
@@ -287,10 +295,12 @@ fun DashboardScreen(
                         },
                         onClearChat = {
                             viewModel.clearActiveChat()
+                            viewModel.closeActiveConversation()
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onBlockUser = {
                             viewModel.blockUser(sub.user)
+                            viewModel.closeActiveConversation()
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onReportUser = {
@@ -300,7 +310,10 @@ fun DashboardScreen(
                             viewModel.deleteActiveChat()
                             activeSubScreen = ActiveSubScreen.None
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = {
+                            viewModel.closeActiveConversation()
+                            activeSubScreen = ActiveSubScreen.None
+                        }
                     )
                 }
 
@@ -318,12 +331,16 @@ fun DashboardScreen(
                         },
                         onBlockClick = {
                             viewModel.blockUser(sub.user)
+                            viewModel.closeActiveConversation()
                             activeSubScreen = ActiveSubScreen.None
                         },
                         onReportClick = {
                             activeSubScreen = ActiveSubScreen.ReportUser(sub.user)
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = {
+                            viewModel.closeActiveConversation()
+                            activeSubScreen = ActiveSubScreen.None
+                        }
                     )
                 }
 
@@ -333,17 +350,24 @@ fun DashboardScreen(
                         onSubmit = { reason, details ->
                             viewModel.submitUserReport(sub.user.id, reason, details)
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = {
+                            viewModel.closeActiveConversation()
+                            activeSubScreen = ActiveSubScreen.None
+                        }
                     )
                 }
 
                 is ActiveSubScreen.ChatAttachment -> {
                     SendAttachmentScreen(
                         onSendAttachment = { uri, caption, mimeType ->
+                            viewModel.updateChatTyping(false)
                             viewModel.sendMessage(caption, uri.toString(), mimeType)
                             activeSubScreen = ActiveSubScreen.None
                         },
-                        onBack = { activeSubScreen = ActiveSubScreen.None }
+                        onBack = {
+                            viewModel.closeActiveConversation()
+                            activeSubScreen = ActiveSubScreen.None
+                        }
                     )
                 }
 
@@ -670,7 +694,7 @@ fun DashboardScreen(
                                         activeSubScreen = ActiveSubScreen.ChatThread(conv)
                                     },
                                     onLongPressConversation = { conv ->
-                                        viewModel.selectConversation(conv)
+                                        viewModel.prepareConversationActions(conv)
                                         activeSubScreen = ActiveSubScreen.ChatOptions(conv.user)
                                     },
                                     onNewChatClick = {

@@ -83,19 +83,110 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
+      function otherParticipant() {
+        return resource.data.userIds[0] == request.auth.uid
+          ? resource.data.userIds[1]
+          : resource.data.userIds[0];
+      }
+
+      function validMessageUpdate() {
+        let uid = request.auth.uid;
+        let otherUid = otherParticipant();
+        let oldUnread = resource.data.get('unreadCounts', {});
+        let newUnread = request.resource.data.get('unreadCounts', {});
+        let messageId = request.resource.data.get('lastMessageId', '_missing');
+        let messagePath = /databases/$(database)/documents/conversations/$(conversationId)/messages/$(messageId);
+        return request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['lastMessage', 'lastMessageId', 'updatedAt', 'unreadCounts'])
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['lastMessageId', 'updatedAt', 'unreadCounts'])
+          && request.resource.data.get('lastMessageId', '') is string
+          && request.resource.data.updatedAt == request.time
+          && newUnread.keys().hasOnly(resource.data.userIds)
+          && newUnread.get(uid, 0) == oldUnread.get(uid, 0)
+          && newUnread.get(otherUid, 0) == oldUnread.get(otherUid, 0) + 1
+          && !exists(messagePath)
+          && existsAfter(messagePath)
+          && getAfter(messagePath).data.senderId == uid
+          && getAfter(messagePath).data.createdAt == request.time;
+      }
+
+      function validReadUpdate() {
+        let uid = request.auth.uid;
+        let otherUid = otherParticipant();
+        let oldUnread = resource.data.get('unreadCounts', {});
+        let newUnread = request.resource.data.get('unreadCounts', {});
+        let oldReadAt = resource.data.get('readAt', {});
+        let newReadAt = request.resource.data.get('readAt', {});
+        let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+        return changedKeys.hasOnly(['unreadCounts', 'readAt'])
+          && changedKeys.hasAny(['unreadCounts', 'readAt'])
+          && newUnread.keys().hasOnly(resource.data.userIds)
+          && newReadAt.keys().hasOnly(resource.data.userIds)
+          && newUnread.get(uid, 0) == 0
+          && newUnread.get(otherUid, 0) == oldUnread.get(otherUid, 0)
+          && newReadAt.get(otherUid, null) == oldReadAt.get(otherUid, null)
+          && (!changedKeys.hasAny(['readAt'])
+            || newReadAt.get(uid, null) == request.time)
+          && (changedKeys.hasAny(['readAt'])
+            || newReadAt.get(uid, null) == oldReadAt.get(uid, null));
+      }
+
+      function validTypingUpdate() {
+        let uid = request.auth.uid;
+        let otherUid = otherParticipant();
+        let oldTyping = resource.data.get('typing', {});
+        let newTyping = request.resource.data.get('typing', {});
+        let myTyping = newTyping.get(uid, null);
+        return request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['typing'])
+          && newTyping.keys().hasOnly(resource.data.userIds)
+          && newTyping.get(otherUid, null) == oldTyping.get(otherUid, null)
+          && (myTyping == null
+            || (myTyping is map
+              && myTyping.keys().hasOnly(['isTyping', 'updatedAt', 'expiresAt'])
+              && myTyping.isTyping == true
+              && myTyping.updatedAt == request.time
+              && myTyping.expiresAt is timestamp
+              && myTyping.expiresAt > request.time));
+      }
+
+      function validArchiveUpdate() {
+        let uid = request.auth.uid;
+        let otherUid = otherParticipant();
+        let oldArchived = resource.data.get('archivedBy', []);
+        let newArchived = request.resource.data.get('archivedBy', []);
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archivedBy'])
+          && newArchived.hasOnly(resource.data.userIds)
+          && oldArchived.hasAny([otherUid]) == newArchived.hasAny([otherUid])
+          && (oldArchived.hasAny([uid]) != newArchived.hasAny([uid]));
+      }
+
+      function validLegacyMessageUpdate() {
+        let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+        return changedKeys.hasOnly(['lastMessage', 'updatedAt'])
+          && changedKeys.hasAny(['updatedAt'])
+          && request.resource.data.updatedAt == request.time;
+      }
+
       allow read: if signedIn() && request.auth.uid in resource.data.userIds;
       allow create: if signedIn()
         && request.auth.uid in request.resource.data.userIds
         && request.resource.data.userIds.size() == 2
         && request.resource.data.userIds[0] < request.resource.data.userIds[1]
         && conversationId == request.resource.data.userIds[0] + '_' + request.resource.data.userIds[1]
+        && request.resource.data.get('unreadCounts', {}).keys()
+          .hasOnly(request.resource.data.userIds)
         && (existsAfter(/databases/$(database)/documents/matches/$(conversationId))
           || existsAfter(/databases/$(database)/documents/friendships/$(conversationId)));
       allow update: if signedIn()
         && request.auth.uid in resource.data.userIds
         && request.resource.data.userIds == resource.data.userIds
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['lastMessage', 'updatedAt', 'archivedBy']);
+        && (validMessageUpdate()
+          || validLegacyMessageUpdate()
+          || validReadUpdate()
+          || validTypingUpdate()
+          || validArchiveUpdate());
       allow delete: if false;
 
       match /messages/{messageId} {
@@ -104,7 +195,8 @@ service cloud.firestore {
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 2000
-          && request.resource.data.attachmentType in [null, 'image', 'audio', 'document'];
+          && request.resource.data.attachmentType in [null, 'image', 'audio', 'document']
+          && request.resource.data.createdAt == request.time;
         allow update: if false;
         allow delete: if isConversationParticipant(conversationId);
       }

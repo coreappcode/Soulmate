@@ -5,15 +5,18 @@ import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModel
 import com.google.firebase.FirebaseException
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.example.data.ChatConversation
 import com.example.data.ChatMessage
+import com.example.data.ConversationSummary
 import com.example.data.Country
 import com.example.data.FriendRequestItem
 import com.example.data.FirebaseDashboardData
+import com.example.data.FirebaseListenerRegistration
 import com.example.data.FirebasePresenceRepository
 import com.example.data.FirebaseRepository
 import com.example.data.MessageStatus
@@ -26,6 +29,7 @@ import com.example.utils.Validators
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,6 +95,18 @@ class SoulmateViewModel : ViewModel() {
     private var presenceListening = false
     private var onlineUserIds = emptySet<String>()
     private var presenceSyncJob: Job? = null
+    private var conversationSummaryListener: FirebaseListenerRegistration? = null
+    private var activeConversationListener: FirebaseListenerRegistration? = null
+    private var conversationRefreshJob: Job? = null
+    private var typingRefreshJob: Job? = null
+    private var typingExpiryJob: Job? = null
+    private var typingConversationId: String? = null
+    private var typingGeneration = 0L
+    private var activeTypingExpiryMillis: Long? = null
+    private var lastReadRequestAt: Timestamp? = null
+    private var unreadClearRequested = false
+    private val summaryTypingExpiries = mutableMapOf<String, Long>()
+    private val summaryTypingExpiryJobs = mutableMapOf<String, Job>()
     private val _phoneAuthState = MutableStateFlow(PhoneAuthUiState())
     val phoneAuthState: StateFlow<PhoneAuthUiState> = _phoneAuthState.asStateFlow()
     private var pendingPhoneNumberForProfile: String? = null
@@ -161,6 +177,8 @@ class SoulmateViewModel : ViewModel() {
     private val authStateListener = FirebaseAuth.AuthStateListener { auth ->
         val user = auth.currentUser
         if (user == null) {
+            stopConversationSummaryListener()
+            stopActiveConversationObservation(clearActive = true, publishTypingStop = false)
             loadedUid = null
             presenceRepository.stopObserving()
             presenceListening = false
@@ -168,6 +186,8 @@ class SoulmateViewModel : ViewModel() {
             onlineUserIds = emptySet()
             clearRemoteState()
         } else if (loadedUid != user.uid) {
+            stopConversationSummaryListener()
+            stopActiveConversationObservation(clearActive = true, publishTypingStop = false)
             presenceRepository.stopObserving()
             presenceListening = false
             privacySettingsLoaded = false
@@ -241,6 +261,8 @@ class SoulmateViewModel : ViewModel() {
         profileSaveJob?.cancel()
         presenceSyncJob?.cancel()
         presenceRepository.stopObserving()
+        stopConversationSummaryListener()
+        stopActiveConversationObservation(clearActive = true, publishTypingStop = false)
         super.onCleared()
     }
 
@@ -249,12 +271,18 @@ class SoulmateViewModel : ViewModel() {
         appInForeground = isForeground
         if (isForeground) {
             startPresenceIfReady()
+            if (loadedUid != null && !_uiState.value.isProfileLoading) {
+                startConversationSummaryListener()
+                _activeConversation.value?.let(::observeActiveConversation)
+            }
         } else {
+            stopConversationSummaryListener()
             presenceRepository.stopObserving()
             presenceListening = false
             onlineUserIds = emptySet()
             applyPresenceToUsers()
             syncPresencePublication()
+            stopActiveConversationObservation(clearActive = false)
         }
     }
 
@@ -285,6 +313,262 @@ class SoulmateViewModel : ViewModel() {
                 reportDataError(exception)
             }
         }
+    }
+
+    private fun startConversationSummaryListener() {
+        if (!appInForeground || conversationSummaryListener != null) return
+        val uid = firebaseAuth.currentUser?.uid ?: return
+        conversationSummaryListener = repository.observeConversationSummaries(
+            onUpdate = { summaries ->
+                if (firebaseAuth.currentUser?.uid == uid) applyConversationSummaries(summaries)
+            },
+            onError = { exception ->
+                if (firebaseAuth.currentUser?.uid == uid) reportDataError(exception)
+            }
+        )
+    }
+
+    private fun stopConversationSummaryListener() {
+        conversationSummaryListener?.remove()
+        conversationSummaryListener = null
+        conversationRefreshJob?.cancel()
+        conversationRefreshJob = null
+        summaryTypingExpiryJobs.values.forEach(Job::cancel)
+        summaryTypingExpiryJobs.clear()
+        summaryTypingExpiries.clear()
+    }
+
+    private fun applyConversationSummaries(summaries: List<ConversationSummary>) {
+        val blockedIds = _blockedUsers.value.map { it.id }.toSet()
+        val visibleSummaries = summaries.filterNot { it.userId in blockedIds }
+        val currentById = _conversations.value.associateBy { it.id }
+        val hasNewConversation = visibleSummaries.any { it.id !in currentById }
+        if (hasNewConversation && conversationRefreshJob?.isActive != true) {
+            conversationRefreshJob = viewModelScope.launch {
+                try {
+                    refreshDashboardData()
+                } catch (exception: Exception) {
+                    reportDataError(exception)
+                }
+            }
+        }
+
+        _conversations.value = visibleSummaries.mapNotNull { summary ->
+            currentById[summary.id]?.copy(
+                lastMessage = summary.lastMessage,
+                timestamp = summary.timestamp,
+                unreadCount = summary.unreadCount,
+                isTyping = summary.isTyping
+            )
+        }
+        _activeConversation.update { active ->
+            val summary = visibleSummaries.firstOrNull { it.id == active?.id }
+            if (active == null || summary == null) active else active.copy(
+                lastMessage = summary.lastMessage,
+                timestamp = summary.timestamp,
+                unreadCount = summary.unreadCount,
+                isTyping = summary.isTyping
+            )
+        }
+
+        visibleSummaries.forEach { summary ->
+            if (summaryTypingExpiries[summary.id] == summary.typingExpiresAtMillis) return@forEach
+            summaryTypingExpiryJobs.remove(summary.id)?.cancel()
+            val expiresAt = summary.typingExpiresAtMillis
+            if (expiresAt == null) {
+                summaryTypingExpiries.remove(summary.id)
+            } else {
+                summaryTypingExpiries[summary.id] = expiresAt
+                summaryTypingExpiryJobs[summary.id] = viewModelScope.launch {
+                    delay((expiresAt - System.currentTimeMillis()).coerceAtLeast(0L))
+                    if (summaryTypingExpiries[summary.id] == expiresAt) {
+                        summaryTypingExpiries.remove(summary.id)
+                        summaryTypingExpiryJobs.remove(summary.id)
+                        _conversations.update { conversations ->
+                            conversations.map {
+                                if (it.id == summary.id) it.copy(isTyping = false) else it
+                            }
+                        }
+                        _activeConversation.update {
+                            if (it?.id == summary.id) it.copy(isTyping = false) else it
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun observeActiveConversation(conversation: ChatConversation) {
+        if (typingConversationId != null && typingConversationId != conversation.id) {
+            stopTypingStatus()
+        }
+        activeConversationListener?.remove()
+        activeConversationListener = null
+        typingExpiryJob?.cancel()
+        activeTypingExpiryMillis = null
+        lastReadRequestAt = null
+        unreadClearRequested = false
+        activeConversationListener = repository.observeConversation(
+            conversationId = conversation.id,
+            onUpdate = { liveState ->
+                if (_activeConversation.value?.id != conversation.id) return@observeConversation
+                _activeConversation.update { active ->
+                    if (active?.id != conversation.id) active else active.copy(
+                        messages = liveState.messages,
+                        unreadCount = liveState.unreadCount,
+                        isTyping = liveState.isTyping
+                    )
+                }
+                _conversations.update { conversations ->
+                    conversations.map {
+                        if (it.id == conversation.id) it.copy(
+                            messages = liveState.messages,
+                            unreadCount = liveState.unreadCount,
+                            isTyping = liveState.isTyping
+                        ) else it
+                    }
+                }
+
+                if (activeTypingExpiryMillis != liveState.typingExpiresAtMillis) {
+                    activeTypingExpiryMillis = liveState.typingExpiresAtMillis
+                    typingExpiryJob?.cancel()
+                    val expiry = liveState.typingExpiresAtMillis
+                    if (expiry != null) {
+                        typingExpiryJob = viewModelScope.launch {
+                            delay((expiry - System.currentTimeMillis()).coerceAtLeast(0L))
+                            if (
+                                _activeConversation.value?.id == conversation.id &&
+                                activeTypingExpiryMillis == expiry
+                            ) {
+                                activeTypingExpiryMillis = null
+                                _activeConversation.update {
+                                    if (it?.id == conversation.id) it.copy(isTyping = false) else it
+                                }
+                                _conversations.update { conversations ->
+                                    conversations.map {
+                                        if (it.id == conversation.id) it.copy(isTyping = false) else it
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                val newestIncoming = liveState.latestIncomingMessageAt
+                if (
+                    appInForeground &&
+                    newestIncoming != null &&
+                    lastReadRequestAt?.let { newestIncoming > it } != false
+                ) {
+                    lastReadRequestAt = newestIncoming
+                    viewModelScope.launch {
+                        try {
+                            repository.markConversationRead(
+                                conversation.id,
+                                newestIncoming,
+                                sendReadReceipt = _privacySettings.value.sendReadReceipts
+                            )
+                        } catch (exception: Exception) {
+                            if (lastReadRequestAt == newestIncoming) lastReadRequestAt = null
+                            reportDataError(exception)
+                        }
+                    }
+                } else if (
+                    appInForeground &&
+                    liveState.unreadCount > 0 &&
+                    !unreadClearRequested
+                ) {
+                    unreadClearRequested = true
+                    viewModelScope.launch {
+                        try {
+                            repository.markConversationRead(
+                                conversation.id,
+                                null,
+                                sendReadReceipt = _privacySettings.value.sendReadReceipts
+                            )
+                        } catch (exception: Exception) {
+                            unreadClearRequested = false
+                            reportDataError(exception)
+                        }
+                    }
+                }
+            },
+            onError = ::reportDataError
+        )
+    }
+
+    private fun stopActiveConversationObservation(
+        clearActive: Boolean = true,
+        publishTypingStop: Boolean = true
+    ) {
+        activeConversationListener?.remove()
+        activeConversationListener = null
+        typingExpiryJob?.cancel()
+        typingExpiryJob = null
+        activeTypingExpiryMillis = null
+        if (publishTypingStop) {
+            stopTypingStatus()
+        } else {
+            typingConversationId = null
+            typingGeneration++
+            typingRefreshJob?.cancel()
+            typingRefreshJob = null
+        }
+        if (clearActive) _activeConversation.value = null
+    }
+
+    fun updateChatTyping(isTyping: Boolean) {
+        val conversationId = _activeConversation.value?.id ?: return
+        if (!isTyping) {
+            if (typingConversationId == conversationId) stopTypingStatus()
+            return
+        }
+        if (typingConversationId == conversationId && typingRefreshJob?.isActive == true) return
+        stopTypingStatus()
+        typingGeneration++
+        val generation = typingGeneration
+        typingConversationId = conversationId
+        typingRefreshJob = viewModelScope.launch {
+            try {
+                while (
+                    typingConversationId == conversationId &&
+                    typingGeneration == generation
+                ) {
+                    repository.setTypingStatus(conversationId, true)
+                    delay(3_000L)
+                }
+            } catch (exception: Exception) {
+                if (typingConversationId == conversationId) {
+                    typingConversationId = null
+                    typingGeneration++
+                }
+                reportDataError(exception)
+            }
+        }
+    }
+
+    private fun stopTypingStatus() {
+        val conversationId = typingConversationId ?: return
+        typingConversationId = null
+        typingGeneration++
+        typingRefreshJob = null
+        viewModelScope.launch {
+            try {
+                repository.setTypingStatus(conversationId, false)
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            }
+        }
+    }
+
+    private suspend fun stopTypingAndWait() {
+        val conversationId = typingConversationId ?: return
+        typingConversationId = null
+        typingGeneration++
+        val writer = typingRefreshJob
+        typingRefreshJob = null
+        writer?.cancelAndJoin()
+        repository.setTypingStatus(conversationId, false)
     }
 
     private fun withPresence(user: User): User =
@@ -347,6 +631,7 @@ class SoulmateViewModel : ViewModel() {
                 applyStoredSettings(repository.loadAllSettings())
                 privacySettingsLoaded = true
                 startPresenceIfReady()
+                if (appInForeground) startConversationSummaryListener()
                 applyCurrentFilters()
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
@@ -370,9 +655,17 @@ class SoulmateViewModel : ViewModel() {
         _exploreDeck.value = data.exploreDeck.map(::withPresence)
         _availableProfiles.value = data.exploreDeck.map(::withPresence)
         val blockedIds = data.blockedUsers.map { it.id }.toSet()
+        val existingConversations = _conversations.value.associateBy { it.id }
         _conversations.value = data.conversations
             .filterNot { it.user.id in blockedIds }
-            .map { it.copy(user = withPresence(it.user)) }
+            .map { conversation ->
+                val existing = existingConversations[conversation.id]
+                conversation.copy(
+                    user = withPresence(conversation.user),
+                    messages = existing?.messages.orEmpty(),
+                    isTyping = existing?.isTyping ?: conversation.isTyping
+                )
+            }
         _friendsList.value = data.friends.filterNot { it.id in blockedIds }.map(::withPresence)
         _friendRequests.value = data.friendRequests.map { it.copy(user = withPresence(it.user)) }
         _sentRequests.value = data.sentRequests.map { it.copy(user = withPresence(it.user)) }
@@ -383,6 +676,8 @@ class SoulmateViewModel : ViewModel() {
     private fun clearRemoteState() {
         dataLoadJob?.cancel()
         profileSaveJob?.cancel()
+        stopConversationSummaryListener()
+        stopActiveConversationObservation(clearActive = true, publishTypingStop = false)
         _uiState.value = UserProfileState()
         _exploreDeck.value = emptyList()
         _swipedHistory.value = emptyList()
@@ -476,13 +771,20 @@ class SoulmateViewModel : ViewModel() {
         presenceListening = false
         viewModelScope.launch {
             try {
-                presenceRepository.setPublishingEnabled(false)
-                firebaseAuth.signOut()
-                resetPhoneAuth()
-                _uiState.update { it.copy(isPhoneVerified = false, phoneNumber = "") }
+                stopTypingAndWait()
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
+            stopConversationSummaryListener()
+            stopActiveConversationObservation(clearActive = true, publishTypingStop = false)
+            try {
+                presenceRepository.setPublishingEnabled(false)
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            }
+            firebaseAuth.signOut()
+            resetPhoneAuth()
+            _uiState.update { it.copy(isPhoneVerified = false, phoneNumber = "") }
         }
     }
 
@@ -1058,18 +1360,16 @@ class SoulmateViewModel : ViewModel() {
 
     fun selectConversation(conversation: ChatConversation) {
         _activeConversation.value = conversation.copy(user = withPresence(conversation.user))
-        viewModelScope.launch {
-            try {
-                val messages = repository.loadMessages(conversation.id)
-                val updated = conversation.copy(messages = messages)
-                _activeConversation.value = updated
-                _conversations.update { items ->
-                    items.map { if (it.id == updated.id) updated else it }
-                }
-            } catch (exception: Exception) {
-                reportDataError(exception)
-            }
-        }
+        observeActiveConversation(conversation)
+    }
+
+    fun prepareConversationActions(conversation: ChatConversation) {
+        stopActiveConversationObservation(clearActive = false)
+        _activeConversation.value = conversation.copy(user = withPresence(conversation.user))
+    }
+
+    fun closeActiveConversation() {
+        stopActiveConversationObservation()
     }
 
     fun openConversationForUser(user: User, onReady: (ChatConversation) -> Unit = {}) {
@@ -1121,13 +1421,6 @@ class SoulmateViewModel : ViewModel() {
                     attachmentUrl,
                     attachmentType
                 )
-                val messages = repository.loadMessages(conversation.id)
-                val updated = conversation.copy(messages = messages)
-                _activeConversation.value = updated
-                _conversations.update { items ->
-                    items.map { if (it.id == updated.id) updated else it }
-                }
-                refreshDashboardData()
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
@@ -1139,13 +1432,16 @@ class SoulmateViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 repository.clearConversation(active.id)
-                val messages = repository.loadMessages(active.id)
-                val cleared = active.copy(messages = messages, lastMessage = "")
+                repository.markConversationRead(
+                    active.id,
+                    null,
+                    sendReadReceipt = _privacySettings.value.sendReadReceipts
+                )
+                val cleared = active.copy(messages = emptyList(), lastMessage = "", unreadCount = 0)
                 _activeConversation.value = cleared
                 _conversations.update { items ->
                     items.map { if (it.id == cleared.id) cleared else it }
                 }
-                refreshDashboardData()
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
@@ -1158,7 +1454,7 @@ class SoulmateViewModel : ViewModel() {
             try {
                 repository.archiveConversation(active.id)
                 _conversations.update { items -> items.filterNot { it.id == active.id } }
-                _activeConversation.value = null
+                stopActiveConversationObservation()
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
@@ -1265,8 +1561,30 @@ class SoulmateViewModel : ViewModel() {
     }
 
     fun updatePrivacySettings(newState: PrivacySettingsState) {
+        val previousSettings = _privacySettings.value
         _privacySettings.value = newState
         syncPresencePublication()
+        if (newState.sendReadReceipts && !previousSettings.sendReadReceipts) {
+            val active = _activeConversation.value
+            val newestIncoming = active?.messages.orEmpty()
+                .asSequence()
+                .filterNot { it.isOwn }
+                .mapNotNull { it.createdAt }
+                .maxOrNull()
+            if (active != null && appInForeground) {
+                viewModelScope.launch {
+                    try {
+                        repository.markConversationRead(
+                            active.id,
+                            newestIncoming,
+                            sendReadReceipt = true
+                        )
+                    } catch (exception: Exception) {
+                        reportDataError(exception)
+                    }
+                }
+            }
+        }
         viewModelScope.launch {
             try {
                 repository.savePrivacySettings(

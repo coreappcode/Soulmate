@@ -53,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +99,7 @@ import com.example.ui.theme.TextSecondary
 fun ChatThreadScreen(
     conversation: ChatConversation,
     onSendMessage: (String) -> Unit,
+    onTypingChanged: (Boolean) -> Unit,
     onOpenAttachment: () -> Unit,
     onOpenInfo: () -> Unit,
     onOpenOptions: () -> Unit,
@@ -105,8 +107,12 @@ fun ChatThreadScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var inputText by remember { mutableStateOf("") }
+    var inputText by remember(conversation.id) { mutableStateOf("") }
     var fullScreenImageViewerUrl by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(conversation.id) {
+        onDispose { onTypingChanged(false) }
+    }
 
     val listState = rememberLazyListState()
     val user = conversation.user
@@ -350,7 +356,10 @@ fun ChatThreadScreen(
 
                     BasicTextField(
                         value = inputText,
-                        onValueChange = { inputText = it },
+                        onValueChange = {
+                            inputText = it
+                            onTypingChanged(it.isNotBlank())
+                        },
                         textStyle = TextStyle(
                             fontFamily = InterFontFamily,
                             fontSize = 14.sp,
@@ -362,6 +371,7 @@ fun ChatThreadScreen(
                         keyboardActions = KeyboardActions(
                             onSend = {
                                 if (inputText.isNotBlank()) {
+                                    onTypingChanged(false)
                                     onSendMessage(inputText.trim())
                                     inputText = ""
                                 }
@@ -382,6 +392,7 @@ fun ChatThreadScreen(
                             .clip(CircleShape)
                             .background(AuroraHorizontalGradient)
                             .clickable {
+                                onTypingChanged(false)
                                 onSendMessage(inputText.trim())
                                 inputText = ""
                             }

@@ -1,5 +1,7 @@
 package com.example.data
 
+import com.google.firebase.Timestamp
+
 data class User(
     val id: String,
     val name: String,
@@ -103,9 +105,10 @@ data class ChatMessage(
     val text: String,
     val isOwn: Boolean,
     val timestamp: String,
-    val status: MessageStatus = MessageStatus.READ,
+    val status: MessageStatus = MessageStatus.SENT,
     val imageUrl: String? = null,
-    val attachmentType: String? = null
+    val attachmentType: String? = null,
+    val createdAt: Timestamp? = null
 )
 
 data class ChatConversation(

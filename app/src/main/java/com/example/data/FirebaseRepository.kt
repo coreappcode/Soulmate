@@ -6,15 +6,21 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+
+private const val TYPING_EXPIRY_MILLIS = 8_000L
 
 data class FirebaseDashboardData(
     val exploreDeck: List<User> = emptyList(),
@@ -25,6 +31,30 @@ data class FirebaseDashboardData(
     val blockedUsers: List<User> = emptyList()
 )
 
+data class ConversationSummary(
+    val id: String,
+    val userId: String,
+    val lastMessage: String,
+    val timestamp: String,
+    val unreadCount: Int,
+    val isTyping: Boolean,
+    val typingExpiresAtMillis: Long?
+)
+
+data class LiveConversationState(
+    val messages: List<ChatMessage>,
+    val unreadCount: Int,
+    val isTyping: Boolean,
+    val typingExpiresAtMillis: Long?,
+    val latestIncomingMessageAt: Timestamp?
+)
+
+class FirebaseListenerRegistration(
+    private val registrations: List<ListenerRegistration>
+) {
+    fun remove() = registrations.forEach { it.remove() }
+}
+
 class UsernameTakenException : Exception("That username is already in use.")
 
 class FirebaseRepository(
@@ -32,6 +62,7 @@ class FirebaseRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val storage: FirebaseStorage = FirebaseStorage.getInstance()
 ) {
+    private val typingWriteMutex = Mutex()
     val currentUid: String?
         get() = auth.currentUser?.uid
 
@@ -254,6 +285,248 @@ class FirebaseRepository(
         )
     }
 
+    fun observeConversationSummaries(
+        onUpdate: (List<ConversationSummary>) -> Unit,
+        onError: (Exception) -> Unit
+    ): FirebaseListenerRegistration {
+        val uid = requireCurrentUid()
+        var conversationSnapshot: QuerySnapshot? = null
+        var historySnapshot: DocumentSnapshot? = null
+        var hasHistorySnapshot = false
+
+        fun emitSummaries() {
+            val conversations = conversationSnapshot ?: return
+            if (!hasHistorySnapshot) return
+            val history = historySnapshot
+            onUpdate(
+                conversations.documents
+                    .filterNot { uid in it.get("archivedBy").stringList() }
+                    .mapNotNull { snapshot ->
+                        val otherId = snapshot.get("userIds").stringList()
+                            .firstOrNull { it != uid }
+                            ?: return@mapNotNull null
+                        val updatedAt = snapshot.getTimestamp("updatedAt")
+                        val clearedAt = history?.getTimestamp("clearedAt.${snapshot.id}")
+                        val historyWasCleared = updatedAt != null &&
+                            clearedAt != null &&
+                            updatedAt.compareTo(clearedAt) <= 0
+                        val unreadCounts = snapshot.get("unreadCounts") as? Map<*, *>
+                        val typingByUser = snapshot.get("typing") as? Map<*, *>
+                        val otherTyping = typingByUser?.get(otherId) as? Map<*, *>
+                        val typingExpiresAt = (otherTyping?.get("expiresAt") as? Timestamp)
+                            ?.toDate()?.time
+                        val isTyping = otherTyping?.get("isTyping") == true &&
+                            typingExpiresAt != null &&
+                            typingExpiresAt > System.currentTimeMillis()
+                        ConversationSummary(
+                            id = snapshot.id,
+                            userId = otherId,
+                            lastMessage = if (historyWasCleared) {
+                                ""
+                            } else {
+                                snapshot.getString("lastMessage").orEmpty()
+                            },
+                            timestamp = updatedAt.formatTime(),
+                            unreadCount = (unreadCounts?.get(uid) as? Number)?.toInt() ?: 0,
+                            isTyping = isTyping,
+                            typingExpiresAtMillis = typingExpiresAt.takeIf { isTyping }
+                        )
+                    }
+            )
+        }
+
+        val conversationListener = firestore.collection("conversations")
+            .whereArrayContains("userIds", uid)
+            .orderBy("updatedAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                } else if (snapshot != null) {
+                    conversationSnapshot = snapshot
+                    emitSummaries()
+                }
+            }
+        val historyListener = firestore.collection("users").document(uid)
+            .collection("settings").document("chatHistory")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                } else {
+                    historySnapshot = snapshot
+                    hasHistorySnapshot = true
+                    emitSummaries()
+                }
+            }
+        return FirebaseListenerRegistration(listOf(conversationListener, historyListener))
+    }
+
+    fun observeConversation(
+        conversationId: String,
+        onUpdate: (LiveConversationState) -> Unit,
+        onError: (Exception) -> Unit
+    ): FirebaseListenerRegistration {
+        val uid = requireCurrentUid()
+        val conversationReference = firestore.collection("conversations").document(conversationId)
+        var conversationSnapshot: DocumentSnapshot? = null
+        var messagesSnapshot: QuerySnapshot? = null
+        var historySnapshot: DocumentSnapshot? = null
+        var hasHistorySnapshot = false
+
+        fun emitState() {
+            val conversation = conversationSnapshot?.takeIf { it.exists() } ?: return
+            if (!hasHistorySnapshot) return
+            val participants = conversation.get("userIds").stringList()
+            if (uid !in participants) {
+                onError(IllegalStateException("You are no longer a participant in this chat."))
+                return
+            }
+            val readAt = conversation.get("readAt") as? Map<*, *> ?: emptyMap<Any, Any>()
+            val otherReadAt = participants.asSequence()
+                .filterNot { it == uid }
+                .mapNotNull { readAt[it] as? Timestamp }
+                .maxOrNull()
+            val clearedAt = historySnapshot?.getTimestamp("clearedAt.$conversationId")
+            val messageDocuments = messagesSnapshot?.documents.orEmpty().filter { message ->
+                val createdAt = message.getTimestamp("createdAt")
+                createdAt == null || clearedAt == null || createdAt > clearedAt
+            }
+            val messages = messageDocuments.map { message ->
+                val createdAt = message.getTimestamp("createdAt")
+                val isOwn = message.getString("senderId") == uid
+                ChatMessage(
+                    id = message.id,
+                    text = message.getString("text").orEmpty(),
+                    isOwn = isOwn,
+                    timestamp = createdAt.formatTime(),
+                    status = if (
+                        isOwn &&
+                        createdAt != null &&
+                        otherReadAt != null &&
+                        otherReadAt >= createdAt
+                    ) {
+                        MessageStatus.READ
+                    } else {
+                        MessageStatus.SENT
+                    },
+                    imageUrl = message.getString("attachmentUrl"),
+                    attachmentType = message.getString("attachmentType"),
+                    createdAt = createdAt
+                )
+            }
+            val typingByUser = conversation.get("typing") as? Map<*, *>
+                ?: emptyMap<Any, Any>()
+            val activeTyping = participants.asSequence()
+                .filterNot { it == uid }
+                .mapNotNull { participant ->
+                    val typing = typingByUser[participant] as? Map<*, *> ?: return@mapNotNull null
+                    if (typing["isTyping"] != true) return@mapNotNull null
+                    (typing["expiresAt"] as? Timestamp)?.toDate()?.time
+                }
+                .filter { it > System.currentTimeMillis() }
+                .maxOrNull()
+            val unreadCounts = conversation.get("unreadCounts") as? Map<*, *>
+            onUpdate(
+                LiveConversationState(
+                    messages = messages,
+                    unreadCount = (unreadCounts?.get(uid) as? Number)?.toInt() ?: 0,
+                    isTyping = activeTyping != null,
+                    typingExpiresAtMillis = activeTyping,
+                    latestIncomingMessageAt = messageDocuments
+                        .asSequence()
+                        .filter { it.getString("senderId") != uid }
+                        .mapNotNull { it.getTimestamp("createdAt") }
+                        .maxOrNull()
+                )
+            )
+        }
+
+        val conversationListener = conversationReference.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                onError(error)
+            } else if (snapshot != null) {
+                if (!snapshot.exists()) {
+                    onError(IllegalStateException("This conversation is no longer available."))
+                } else {
+                    conversationSnapshot = snapshot
+                    emitState()
+                }
+            }
+        }
+        val messagesListener = conversationReference.collection("messages")
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                } else if (snapshot != null) {
+                    messagesSnapshot = snapshot
+                    emitState()
+                }
+            }
+        val historyListener = firestore.collection("users").document(uid)
+            .collection("settings").document("chatHistory")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                } else {
+                    historySnapshot = snapshot
+                    hasHistorySnapshot = true
+                    emitState()
+                }
+            }
+        return FirebaseListenerRegistration(
+            listOf(conversationListener, messagesListener, historyListener)
+        )
+    }
+
+    suspend fun markConversationRead(
+        conversationId: String,
+        newestIncomingMessageAt: Timestamp?,
+        sendReadReceipt: Boolean
+    ) {
+        val uid = requireCurrentUid()
+        val reference = firestore.collection("conversations").document(conversationId)
+        firestore.runTransaction { transaction ->
+            val conversation = transaction.get(reference)
+            require(conversation.exists() && uid in conversation.get("userIds").stringList()) {
+                "This conversation is no longer available."
+            }
+            val unreadCounts = conversation.get("unreadCounts") as? Map<*, *>
+                ?: emptyMap<Any, Any>()
+            val readAt = conversation.get("readAt") as? Map<*, *> ?: emptyMap<Any, Any>()
+            val currentReadAt = readAt[uid] as? Timestamp
+            val hasUnreadMessages = (unreadCounts[uid] as? Number)?.toInt()?.let { it > 0 } == true
+            val hasNewIncomingMessage = newestIncomingMessageAt
+                ?.let { currentReadAt == null || it > currentReadAt } == true
+            val shouldAdvanceReadReceipt = sendReadReceipt &&
+                (hasUnreadMessages || hasNewIncomingMessage)
+            if (!hasUnreadMessages && !shouldAdvanceReadReceipt) return@runTransaction
+
+            val updates = mutableMapOf<String, Any>()
+            if (hasUnreadMessages) updates["unreadCounts.$uid"] = 0
+            if (shouldAdvanceReadReceipt) {
+                updates["readAt.$uid"] = FieldValue.serverTimestamp()
+            }
+            transaction.update(reference, updates)
+        }.await()
+    }
+
+    suspend fun setTypingStatus(conversationId: String, isTyping: Boolean) {
+        val uid = requireCurrentUid()
+        val value: Any = if (isTyping) {
+            mapOf(
+                "isTyping" to true,
+                "updatedAt" to FieldValue.serverTimestamp(),
+                "expiresAt" to Timestamp(Date(System.currentTimeMillis() + TYPING_EXPIRY_MILLIS))
+            )
+        } else {
+            FieldValue.delete()
+        }
+        typingWriteMutex.withLock {
+            firestore.collection("conversations").document(conversationId)
+                .update("typing.$uid", value).await()
+        }
+    }
+
     suspend fun searchProfiles(query: String): List<User> {
         val uid = requireCurrentUid()
         val normalized = query.trim().lowercase(Locale.ROOT)
@@ -317,6 +590,7 @@ class FirebaseRepository(
                             "userIds" to pair,
                             "archivedBy" to emptyList<String>(),
                             "lastMessage" to "",
+                            "unreadCounts" to pair.associateWith { 0 },
                             "updatedAt" to FieldValue.serverTimestamp(),
                             "createdAt" to FieldValue.serverTimestamp()
                         )
@@ -350,6 +624,7 @@ class FirebaseRepository(
                     "userIds" to pair,
                     "archivedBy" to emptyList<String>(),
                     "lastMessage" to "",
+                    "unreadCounts" to pair.associateWith { 0 },
                     "updatedAt" to FieldValue.serverTimestamp(),
                     "createdAt" to FieldValue.serverTimestamp()
                 )
@@ -368,32 +643,6 @@ class FirebaseRepository(
         )
     }
 
-    suspend fun loadMessages(conversationId: String): List<ChatMessage> {
-        val uid = requireCurrentUid()
-        val clearedAt = firestore.collection("users").document(uid)
-            .collection("settings").document("chatHistory")
-            .get().await().getTimestamp("clearedAt.$conversationId")
-        val messages = firestore.collection("conversations").document(conversationId)
-            .collection("messages")
-            .orderBy("createdAt", Query.Direction.ASCENDING)
-        val visibleMessages = if (clearedAt == null) {
-            messages
-        } else {
-            messages.whereGreaterThan("createdAt", clearedAt)
-        }
-        return visibleMessages.get().await().documents.map { message ->
-                ChatMessage(
-                    id = message.id,
-                    text = message.getString("text").orEmpty(),
-                    isOwn = message.getString("senderId") == uid,
-                    timestamp = message.getTimestamp("createdAt").formatTime(),
-                    status = MessageStatus.SENT,
-                    imageUrl = message.getString("attachmentUrl"),
-                    attachmentType = message.getString("attachmentType")
-                )
-            }
-    }
-
     suspend fun sendMessage(
         conversationId: String,
         text: String,
@@ -403,6 +652,7 @@ class FirebaseRepository(
         val uid = requireCurrentUid()
         val messageRef = firestore.collection("conversations").document(conversationId)
             .collection("messages").document()
+        val conversationRef = firestore.collection("conversations").document(conversationId)
         val preview = when {
             text.isNotBlank() -> text
             attachmentType == "image" -> "Sent a photo"
@@ -410,8 +660,19 @@ class FirebaseRepository(
             attachmentType == "document" -> "Sent a document"
             else -> throw IllegalArgumentException("A message or attachment is required.")
         }
-        firestore.runBatch { batch ->
-            batch.set(
+        firestore.runTransaction { transaction ->
+            val conversation = transaction.get(conversationRef)
+            val participants = conversation.get("userIds").stringList()
+            require(conversation.exists() && uid in participants) {
+                "This conversation is no longer available."
+            }
+            val unreadCounts = conversation.get("unreadCounts") as? Map<*, *>
+                ?: emptyMap<Any, Any>()
+            val nextUnreadCounts = participants.associateWith { participant ->
+                val previous = (unreadCounts[participant] as? Number)?.toInt() ?: 0
+                if (participant == uid) previous else previous + 1
+            }
+            transaction.set(
                 messageRef,
                 mapOf(
                     "senderId" to uid,
@@ -421,9 +682,14 @@ class FirebaseRepository(
                     "createdAt" to FieldValue.serverTimestamp()
                 )
             )
-            batch.update(
-                firestore.collection("conversations").document(conversationId),
-                mapOf("lastMessage" to preview, "updatedAt" to FieldValue.serverTimestamp())
+            transaction.update(
+                conversationRef,
+                mapOf(
+                    "lastMessage" to preview,
+                    "lastMessageId" to messageRef.id,
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                    "unreadCounts" to nextUnreadCounts
+                )
             )
         }.await()
     }
@@ -625,12 +891,22 @@ class FirebaseRepository(
                 val historyWasCleared = updatedAt != null &&
                     clearedAt != null &&
                     updatedAt.compareTo(clearedAt) <= 0
+                val unreadCounts = snapshot.get("unreadCounts") as? Map<*, *>
+                val typingByUser = snapshot.get("typing") as? Map<*, *>
+                val otherTyping = typingByUser?.get(otherId) as? Map<*, *>
+                val typingExpiresAt = (otherTyping?.get("expiresAt") as? Timestamp)
+                    ?.toDate()?.time
+                val isTyping = otherTyping?.get("isTyping") == true &&
+                    typingExpiresAt != null &&
+                    typingExpiresAt > System.currentTimeMillis()
                 getPublicUser(otherId)?.let { user ->
                     ChatConversation(
                         id = snapshot.id,
                         user = user,
                         lastMessage = if (historyWasCleared) "" else snapshot.getString("lastMessage").orEmpty(),
-                        timestamp = snapshot.getTimestamp("updatedAt").formatTime()
+                        timestamp = snapshot.getTimestamp("updatedAt").formatTime(),
+                        unreadCount = (unreadCounts?.get(uid) as? Number)?.toInt() ?: 0,
+                        isTyping = isTyping
                     )
                 }
             }
