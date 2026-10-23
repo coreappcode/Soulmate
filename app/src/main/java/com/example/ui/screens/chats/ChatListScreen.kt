@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.Badge
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -310,16 +311,31 @@ fun ChatListScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = if (conv.isTyping) "typing..." else conv.lastMessage,
-                                        fontFamily = InterFontFamily,
-                                        fontWeight = if (conv.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
-                                        fontSize = 13.sp,
-                                        color = if (conv.isTyping) OrchidPrimary else TextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f).padding(end = 8.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = if (conv.isTyping) "typing..." else conv.lastMessage,
+                                            fontFamily = InterFontFamily,
+                                            fontWeight = if (conv.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
+                                            fontSize = 13.sp,
+                                            color = if (conv.isTyping) OrchidPrimary else TextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        if (conv.notificationsMuted) {
+                                            Icon(
+                                                imageVector = Icons.Default.NotificationsOff,
+                                                contentDescription = "Notifications muted",
+                                                tint = TextMuted,
+                                                modifier = Modifier
+                                                    .padding(start = 6.dp)
+                                                    .size(14.dp)
+                                            )
+                                        }
+                                    }
 
                                     if (conv.unreadCount > 0) {
                                         Box(

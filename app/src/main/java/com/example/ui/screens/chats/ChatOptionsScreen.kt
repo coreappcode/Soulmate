@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material3.AlertDialog
@@ -61,6 +62,7 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun ChatOptionsScreen(
     user: User,
+    notificationsMuted: Boolean,
     onViewProfile: () -> Unit,
     onMediaAndFiles: () -> Unit,
     onMute: () -> Unit,
@@ -111,7 +113,15 @@ fun ChatOptionsScreen(
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
                     OptionRow(icon = Icons.Default.Folder, title = "Chat Info", onClick = onMediaAndFiles)
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
-                    OptionRow(icon = Icons.Default.NotificationsOff, title = "Mute Notifications", onClick = onMute)
+                    OptionRow(
+                        icon = if (notificationsMuted) {
+                            Icons.Default.Notifications
+                        } else {
+                            Icons.Default.NotificationsOff
+                        },
+                        title = if (notificationsMuted) "Unmute Notifications" else "Mute Notifications",
+                        onClick = onMute
+                    )
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
                     OptionRow(
                         icon = Icons.Default.RemoveCircleOutline,

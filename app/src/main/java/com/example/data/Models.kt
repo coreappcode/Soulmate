@@ -118,6 +118,7 @@ data class ChatConversation(
     val timestamp: String,
     val unreadCount: Int = 0,
     val isTyping: Boolean = false,
+    val notificationsMuted: Boolean = false,
     val messages: List<ChatMessage> = emptyList()
 )
 

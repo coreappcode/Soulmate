@@ -358,7 +358,8 @@ class SoulmateViewModel : ViewModel() {
                 lastMessage = summary.lastMessage,
                 timestamp = summary.timestamp,
                 unreadCount = summary.unreadCount,
-                isTyping = summary.isTyping
+                isTyping = summary.isTyping,
+                notificationsMuted = summary.notificationsMuted
             )
         }
         _activeConversation.update { active ->
@@ -367,7 +368,8 @@ class SoulmateViewModel : ViewModel() {
                 lastMessage = summary.lastMessage,
                 timestamp = summary.timestamp,
                 unreadCount = summary.unreadCount,
-                isTyping = summary.isTyping
+                isTyping = summary.isTyping,
+                notificationsMuted = summary.notificationsMuted
             )
         }
 
@@ -663,7 +665,9 @@ class SoulmateViewModel : ViewModel() {
                 conversation.copy(
                     user = withPresence(conversation.user),
                     messages = existing?.messages.orEmpty(),
-                    isTyping = existing?.isTyping ?: conversation.isTyping
+                    isTyping = existing?.isTyping ?: conversation.isTyping,
+                    notificationsMuted = existing?.notificationsMuted
+                        ?: conversation.notificationsMuted
                 )
             }
         _friendsList.value = data.friends.filterNot { it.id in blockedIds }.map(::withPresence)
@@ -1370,6 +1374,24 @@ class SoulmateViewModel : ViewModel() {
 
     fun closeActiveConversation() {
         stopActiveConversationObservation()
+    }
+
+    fun setConversationNotificationsMuted(conversationId: String, muted: Boolean) {
+        viewModelScope.launch {
+            try {
+                repository.setConversationNotificationsMuted(conversationId, muted)
+                _conversations.update { conversations ->
+                    conversations.map {
+                        if (it.id == conversationId) it.copy(notificationsMuted = muted) else it
+                    }
+                }
+                _activeConversation.update {
+                    if (it?.id == conversationId) it.copy(notificationsMuted = muted) else it
+                }
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            }
+        }
     }
 
     fun openConversationForUser(user: User, onReady: (ChatConversation) -> Unit = {}) {

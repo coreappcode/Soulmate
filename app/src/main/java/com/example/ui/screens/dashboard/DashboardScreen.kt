@@ -2,6 +2,7 @@ package com.example.ui.screens.dashboard
 
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -25,6 +26,7 @@ import com.example.data.ChatConversation
 import com.example.data.FriendRequestItem
 import com.example.data.User
 import com.example.data.UserProfileState
+import com.example.calls.CallActivity
 import com.example.navigation.Routes
 import com.example.ui.SoulmateViewModel
 import com.example.ui.components.SoulBottomNav
@@ -150,6 +152,17 @@ fun DashboardScreen(
                 activeSubScreen = ActiveSubScreen.None
             }
         }
+    }
+
+    fun openCall(user: User, callType: String) {
+        context.startActivity(
+            Intent(context, CallActivity::class.java)
+                .putExtra(CallActivity.EXTRA_CALLEE_ID, user.id)
+                .putExtra(CallActivity.EXTRA_CALL_TYPE, callType)
+                .putExtra(CallActivity.EXTRA_CALLER_NAME, user.nameWithAge)
+                .putExtra(CallActivity.EXTRA_CALLER_PHOTO, user.photos.firstOrNull().orEmpty())
+                .putExtra(CallActivity.EXTRA_INCOMING, false)
+        )
     }
 
     LaunchedEffect(userProfile.dataError) {
@@ -282,8 +295,10 @@ fun DashboardScreen(
                 }
 
                 is ActiveSubScreen.ChatOptions -> {
+                    val conversation = conversations.firstOrNull { it.user.id == sub.user.id }
                     ChatOptionsScreen(
                         user = sub.user,
+                        notificationsMuted = conversation?.notificationsMuted == true,
                         onViewProfile = {
                             activeSubScreen = ActiveSubScreen.ExploreProfileDetail(sub.user)
                         },
@@ -291,7 +306,12 @@ fun DashboardScreen(
                             activeSubScreen = ActiveSubScreen.ChatInfo(sub.user)
                         },
                         onMute = {
-                            Toast.makeText(context, "Chat muting is not available yet.", Toast.LENGTH_LONG).show()
+                            conversation?.let {
+                                viewModel.setConversationNotificationsMuted(
+                                    it.id,
+                                    !it.notificationsMuted
+                                )
+                            }
                         },
                         onClearChat = {
                             viewModel.clearActiveChat()
@@ -318,16 +338,23 @@ fun DashboardScreen(
                 }
 
                 is ActiveSubScreen.ChatInfo -> {
+                    val conversation = conversations.firstOrNull { it.user.id == sub.user.id }
                     ChatInfoScreen(
                         user = sub.user,
+                        notificationsMuted = conversation?.notificationsMuted == true,
                         onCallClick = {
-                            Toast.makeText(context, "Audio calls are not available yet.", Toast.LENGTH_LONG).show()
+                            openCall(sub.user, "audio")
                         },
                         onVideoClick = {
-                            Toast.makeText(context, "Video calls are not available yet.", Toast.LENGTH_LONG).show()
+                            openCall(sub.user, "video")
                         },
                         onMuteClick = {
-                            Toast.makeText(context, "Chat muting is not available yet.", Toast.LENGTH_LONG).show()
+                            conversation?.let {
+                                viewModel.setConversationNotificationsMuted(
+                                    it.id,
+                                    !it.notificationsMuted
+                                )
+                            }
                         },
                         onBlockClick = {
                             viewModel.blockUser(sub.user)

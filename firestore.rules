@@ -16,6 +16,15 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
 
+      match /devices/{deviceId} {
+        allow read, delete: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['token', 'updatedAt'])
+          && request.resource.data.token is string
+          && request.resource.data.updatedAt == request.time;
+      }
+
       match /settings/{settingId} {
         allow read, write: if signedIn() && request.auth.uid == userId;
       }
@@ -266,6 +275,11 @@ service cloud.firestore {
         && request.resource.data.status == 'open'
         && request.resource.data.createdAt == request.time;
       allow read, update, delete: if false;
+    }
+
+    match /calls/{callId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.participants;
+      allow create, update, delete: if false;
     }
   }
 }

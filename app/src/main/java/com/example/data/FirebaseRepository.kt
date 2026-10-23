@@ -38,7 +38,8 @@ data class ConversationSummary(
     val timestamp: String,
     val unreadCount: Int,
     val isTyping: Boolean,
-    val typingExpiresAtMillis: Long?
+    val typingExpiresAtMillis: Long?,
+    val notificationsMuted: Boolean
 )
 
 data class LiveConversationState(
@@ -292,12 +293,16 @@ class FirebaseRepository(
         val uid = requireCurrentUid()
         var conversationSnapshot: QuerySnapshot? = null
         var historySnapshot: DocumentSnapshot? = null
+        var notificationSettingsSnapshot: DocumentSnapshot? = null
         var hasHistorySnapshot = false
+        var hasNotificationSettingsSnapshot = false
 
         fun emitSummaries() {
             val conversations = conversationSnapshot ?: return
-            if (!hasHistorySnapshot) return
+            if (!hasHistorySnapshot || !hasNotificationSettingsSnapshot) return
             val history = historySnapshot
+            val mutedConversations =
+                notificationSettingsSnapshot?.get("mutedConversations").stringList().toSet()
             onUpdate(
                 conversations.documents
                     .filterNot { uid in it.get("archivedBy").stringList() }
@@ -329,7 +334,8 @@ class FirebaseRepository(
                             timestamp = updatedAt.formatTime(),
                             unreadCount = (unreadCounts?.get(uid) as? Number)?.toInt() ?: 0,
                             isTyping = isTyping,
-                            typingExpiresAtMillis = typingExpiresAt.takeIf { isTyping }
+                            typingExpiresAtMillis = typingExpiresAt.takeIf { isTyping },
+                            notificationsMuted = snapshot.id in mutedConversations
                         )
                     }
             )
@@ -357,7 +363,20 @@ class FirebaseRepository(
                     emitSummaries()
                 }
             }
-        return FirebaseListenerRegistration(listOf(conversationListener, historyListener))
+        val notificationSettingsListener = firestore.collection("users").document(uid)
+            .collection("settings").document("chatNotifications")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                } else {
+                    notificationSettingsSnapshot = snapshot
+                    hasNotificationSettingsSnapshot = true
+                    emitSummaries()
+                }
+            }
+        return FirebaseListenerRegistration(
+            listOf(conversationListener, historyListener, notificationSettingsListener)
+        )
     }
 
     fun observeConversation(
@@ -714,6 +733,26 @@ class FirebaseRepository(
             .update("archivedBy", FieldValue.arrayUnion(uid)).await()
     }
 
+    suspend fun setConversationNotificationsMuted(conversationId: String, muted: Boolean) {
+        val uid = requireCurrentUid()
+        val conversation = firestore.collection("conversations").document(conversationId).get().await()
+        require(conversation.exists() && uid in conversation.get("userIds").stringList()) {
+            "This conversation is no longer available."
+        }
+        firestore.collection("users").document(uid)
+            .collection("settings").document("chatNotifications")
+            .set(
+                mapOf(
+                    "mutedConversations" to if (muted) {
+                        FieldValue.arrayUnion(conversationId)
+                    } else {
+                        FieldValue.arrayRemove(conversationId)
+                    }
+                ),
+                SetOptions.merge()
+            ).await()
+    }
+
     suspend fun sendFriendRequest(target: User) {
         val uid = requireCurrentUid()
         require(target.id != uid) { "You cannot send a friend request to yourself." }
@@ -881,6 +920,10 @@ class FirebaseRepository(
             .get().await()
         val chatHistory = firestore.collection("users").document(uid)
             .collection("settings").document("chatHistory").get().await()
+        val chatNotificationSettings = firestore.collection("users").document(uid)
+            .collection("settings").document("chatNotifications").get().await()
+        val mutedConversations =
+            chatNotificationSettings.get("mutedConversations").stringList().toSet()
         return snapshots.documents
             .filterNot { uid in it.get("archivedBy").stringList() }
             .mapNotNull { snapshot ->
@@ -906,7 +949,8 @@ class FirebaseRepository(
                         lastMessage = if (historyWasCleared) "" else snapshot.getString("lastMessage").orEmpty(),
                         timestamp = snapshot.getTimestamp("updatedAt").formatTime(),
                         unreadCount = (unreadCounts?.get(uid) as? Number)?.toInt() ?: 0,
-                        isTyping = isTyping
+                        isTyping = isTyping,
+                        notificationsMuted = snapshot.id in mutedConversations
                     )
                 }
             }

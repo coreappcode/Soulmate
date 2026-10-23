@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,6 +63,7 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun ChatInfoScreen(
     user: User,
+    notificationsMuted: Boolean,
     onCallClick: () -> Unit,
     onVideoClick: () -> Unit,
     onMuteClick: () -> Unit,
@@ -139,7 +141,11 @@ fun ChatInfoScreen(
             ) {
                 QuickActionButton(icon = Icons.Default.Call, label = "Audio", onClick = onCallClick)
                 QuickActionButton(icon = Icons.Default.Videocam, label = "Video", onClick = onVideoClick)
-                QuickActionButton(icon = Icons.Default.Notifications, label = "Mute", onClick = onMuteClick)
+                QuickActionButton(
+                    icon = if (notificationsMuted) Icons.Default.NotificationsOff else Icons.Default.Notifications,
+                    label = if (notificationsMuted) "Unmute" else "Mute",
+                    onClick = onMuteClick
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))

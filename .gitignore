@@ -15,5 +15,9 @@
 .cxx
 local.properties
 .env
+functions/.env.*
+node_modules/
+functions/lib/
+functions/.env.*
 debug.keystore
 /soulmate-release.jks
