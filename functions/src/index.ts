@@ -1,13 +1,23 @@
 import { createHash, randomUUID } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
-import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import { getStorage } from "firebase-admin/storage";
 import { AccessToken } from "livekit-server-sdk";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
-import { shouldNotifyChatMessage } from "./chatNotificationPolicy.js";
+import {
+  chatAttachmentDownloadToken,
+  firebaseDownloadUrl,
+  storageObjectPathFromDownloadUrl,
+} from "./chatAttachmentSecurity.js";
+import {
+  shouldNotifyChatMessage,
+  shouldRetryChatNotificationFailure,
+} from "./chatNotificationPolicy.js";
 
 initializeApp();
 setGlobalOptions({ region: "asia-southeast1", maxInstances: 10 });
@@ -78,7 +88,10 @@ export const unregisterCallDevice = onCall(async (request) => {
 });
 
 export const notifyOnChatMessage = onDocumentCreated(
-  "conversations/{conversationId}/messages/{messageId}",
+  {
+    document: "conversations/{conversationId}/messages/{messageId}",
+    retry: true,
+  },
   async (event) => {
     const message = event.data?.data();
     const conversationId = event.params.conversationId;
@@ -146,43 +159,332 @@ export const notifyOnChatMessage = onDocumentCreated(
     )).slice(0, 500);
     const senderName = profileName(senderProfile.data());
 
-    try {
-      const result = await getMessaging().sendEachForMulticast({
-        tokens: deviceEntries.map((device) => device.token),
-        data: {
-          type: "incoming_message",
-          conversationId,
-          messageId,
-          recipientId,
-          senderId,
-          senderName,
-          body,
-        },
-        android: { priority: "high" },
-      });
+    const result = await getMessaging().sendEachForMulticast({
+      tokens: deviceEntries.map((device) => device.token),
+      data: {
+        type: "incoming_message",
+        conversationId,
+        messageId,
+        recipientId,
+        senderId,
+        senderName,
+        body,
+      },
+      android: {
+        priority: "high",
+        collapseKey: conversationId.slice(0, 64),
+      },
+    });
 
-      const invalidTokenRefs = result.responses.flatMap((response, index) => {
-        const errorCode = response.error?.code;
-        return errorCode === "messaging/registration-token-not-registered" ||
-          errorCode === "messaging/invalid-registration-token"
-          ? [deviceEntries[index].ref]
-          : [];
-      });
-      if (invalidTokenRefs.length > 0) {
-        const batch = db.batch();
-        invalidTokenRefs.forEach((ref) => batch.delete(ref));
-        await batch.commit();
-      }
-      if (result.failureCount > invalidTokenRefs.length) {
-        logger.error("Some chat message notifications could not be delivered.", {
-          conversationId,
-          messageId,
-          failureCount: result.failureCount,
-        });
-      }
-    } catch (error) {
-      logger.error("Could not send chat message notifications.", { conversationId, messageId, error });
+    const invalidTokenRefs = result.responses.flatMap((response, index) => {
+      const errorCode = response.error?.code;
+      return errorCode === "messaging/registration-token-not-registered" ||
+        errorCode === "messaging/invalid-registration-token"
+        ? [deviceEntries[index].ref]
+        : [];
+    });
+    if (invalidTokenRefs.length > 0) {
+      const batch = db.batch();
+      invalidTokenRefs.forEach((ref) => batch.delete(ref));
+      await batch.commit();
     }
+    const retryableFailures = result.responses.filter((response) =>
+      shouldRetryChatNotificationFailure(response.error?.code)
+    );
+    if (retryableFailures.length > 0) {
+      throw new Error(
+        `Temporary FCM failure for ${retryableFailures.length} device(s) in conversation ${conversationId}.`
+      );
+    }
+    if (result.failureCount > invalidTokenRefs.length) {
+      logger.error("Some chat message notifications could not be delivered.", {
+        conversationId,
+        messageId,
+        failureCount: result.failureCount,
+      });
+    }
+  }
+);
+
+function messagePreview(message: FirebaseFirestore.DocumentData | undefined): string {
+  const text = stringValue(message?.text);
+  if (text) return text;
+  switch (stringValue(message?.attachmentType)) {
+    case "image":
+      return "Sent a photo";
+    case "audio":
+      return "Sent an audio file";
+    case "document":
+      return "Sent a document";
+    default:
+      return "";
+  }
+}
+
+async function rotateConversationAttachmentTokens(
+  conversationId: string,
+  tokenSeed: string
+): Promise<void> {
+  const bucket = getStorage().bucket();
+  const messages = db.collection("conversations").doc(conversationId).collection("messages");
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+
+  while (true) {
+    let query: FirebaseFirestore.Query = messages
+      .orderBy(FieldPath.documentId())
+      .limit(100);
+    if (cursor) query = query.startAfter(cursor);
+    const page = await query.get();
+    if (page.empty) return;
+
+    const batch = db.batch();
+    let hasUrlUpdates = false;
+    for (const message of page.docs) {
+      const oldUrl = stringValue(message.get("attachmentUrl"));
+      if (!oldUrl) continue;
+      const objectPath = storageObjectPathFromDownloadUrl(
+        oldUrl,
+        bucket.name,
+        conversationId
+      );
+      if (!objectPath) continue;
+
+      const token = chatAttachmentDownloadToken(tokenSeed, objectPath);
+      const file = bucket.file(objectPath);
+      try {
+        const [metadata] = await file.getMetadata();
+        await file.setMetadata({
+          metadata: {
+            ...(metadata.metadata ?? {}),
+            firebaseStorageDownloadTokens: token,
+          },
+        });
+        batch.update(message.ref, {
+          attachmentUrl: firebaseDownloadUrl(bucket.name, objectPath, token),
+        });
+        hasUrlUpdates = true;
+      } catch (error) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error.code === 404 || error.code === "storage/object-not-found")
+        ) {
+          logger.warn("Chat message references a missing Storage object.", {
+            conversationId,
+            messageId: message.id,
+            objectPath,
+          });
+          continue;
+        }
+        throw error;
+      }
+    }
+    if (hasUrlUpdates) await batch.commit();
+    cursor = page.docs[page.docs.length - 1];
+    if (page.size < 100) return;
+  }
+}
+
+async function synchronizeConversationBlockState(
+  conversationId: string,
+  participantIds: string[]
+): Promise<void> {
+  if (participantIds.length !== 2) return;
+  const [firstUid, secondUid] = participantIds;
+  const conversationRef = db.collection("conversations").doc(conversationId);
+  const securityRef = db.collection("chatSecurityInternal").doc(conversationId);
+  const firstBlockRef = db.collection("users").doc(firstUid)
+    .collection("blocks").doc(secondUid);
+  const secondBlockRef = db.collection("users").doc(secondUid)
+    .collection("blocks").doc(firstUid);
+
+  const transition = await db.runTransaction(async (transaction) => {
+    const [conversation, securityState, firstBlock, secondBlock] = await Promise.all([
+      transaction.get(conversationRef),
+      transaction.get(securityRef),
+      transaction.get(firstBlockRef),
+      transaction.get(secondBlockRef),
+    ]);
+    if (!conversation.exists) return undefined;
+
+    const isBlocked = firstBlock.exists || secondBlock.exists;
+    const currentStateKey = isBlocked
+      ? [firstBlock.updateTime?.toMillis() ?? 0, secondBlock.updateTime?.toMillis() ?? 0].join(":")
+      : "unblocked";
+    const stateData = securityState.data() ?? {};
+    const previousStateKey = stringValue(stateData.chatSecurityStateKey);
+
+    if (isBlocked) {
+      const tokenSeed = previousStateKey === currentStateKey
+        ? stringValue(stateData.chatSecurityTokenSeed) ?? randomUUID()
+        : randomUUID();
+      transaction.update(conversationRef, {
+        lastMessage: "",
+        lastMessageId: "",
+        unreadCounts: Object.fromEntries(participantIds.map((uid) => [uid, 0])),
+        readAt: {},
+        typing: {},
+      });
+      transaction.set(securityRef, {
+        chatBlockSanitized: true,
+        chatSecurityStateKey: currentStateKey,
+        chatSecurityTokenSeed: tokenSeed,
+        chatAttachmentsSecuredStateKey: stateData.chatAttachmentsSecuredStateKey ?? "",
+      });
+      return {
+        blocked: true,
+        stateKey: currentStateKey,
+        tokenSeed,
+        attachmentsSecured: stateData.chatAttachmentsSecuredStateKey === currentStateKey,
+      };
+    }
+
+    if (stateData.chatBlockSanitized !== true) return undefined;
+    return {
+      blocked: false,
+      stateKey: "unblocked",
+      tokenSeed: undefined,
+      attachmentsSecured: true,
+    };
+  });
+
+  if (!transition) return;
+  if (transition.blocked && !transition.attachmentsSecured && transition.tokenSeed) {
+    await rotateConversationAttachmentTokens(conversationId, transition.tokenSeed);
+    const secured = await db.runTransaction(async (transaction) => {
+      const currentState = await transaction.get(securityRef);
+      if (currentState.get("chatSecurityStateKey") !== transition.stateKey) return false;
+      transaction.update(securityRef, {
+        chatAttachmentsSecuredStateKey: transition.stateKey,
+      });
+      return true;
+    });
+    if (!secured) await synchronizeConversationBlockState(conversationId, participantIds);
+    return;
+  }
+  if (transition.blocked) return;
+
+  const restored = await db.runTransaction(async (transaction) => {
+    const [conversation, securityState, firstBlock, secondBlock] = await Promise.all([
+      transaction.get(conversationRef),
+      transaction.get(securityRef),
+      transaction.get(firstBlockRef),
+      transaction.get(secondBlockRef),
+    ]);
+    if (!conversation.exists || firstBlock.exists || secondBlock.exists) return false;
+    if (securityState.get("chatBlockSanitized") !== true) return true;
+
+    const latestMessages = await transaction.get(
+      conversationRef.collection("messages")
+        .orderBy("createdAt", "desc")
+        .limit(1)
+    );
+    const latest = latestMessages.docs[0];
+    transaction.update(conversationRef, {
+      lastMessage: messagePreview(latest?.data()),
+      lastMessageId: latest?.id ?? "",
+    });
+    transaction.update(securityRef, {
+      chatBlockSanitized: false,
+      chatSecurityStateKey: "unblocked",
+      chatSecurityTokenSeed: FieldValue.delete(),
+    });
+    return true;
+  });
+  if (!restored) {
+    await synchronizeConversationBlockState(conversationId, participantIds);
+  }
+}
+
+export const onChatBlockWritten = onDocumentWritten(
+  "users/{uid}/blocks/{blockedUid}",
+  async (event) => {
+    const participants = [event.params.uid, event.params.blockedUid].sort();
+    await synchronizeConversationBlockState(participants.join("_"), participants);
+  }
+);
+
+async function updateChatBlockStatus(
+  uid: string,
+  targetUid: string,
+  blocked: boolean
+): Promise<void> {
+  const participants = [uid, targetUid].sort();
+  const blockRef = db.collection("users").doc(uid)
+    .collection("blocks").doc(targetUid);
+  const conversationRef = db.collection("conversations")
+    .doc(participants.join("_"));
+
+  await db.runTransaction(async (transaction) => {
+    const [block, conversation] = await Promise.all([
+      transaction.get(blockRef),
+      transaction.get(conversationRef),
+    ]);
+    if (blocked && !block.exists) {
+      transaction.set(blockRef, { createdAt: FieldValue.serverTimestamp() });
+    } else if (!blocked && block.exists) {
+      transaction.delete(blockRef);
+    }
+    if (blocked && conversation.exists) {
+      transaction.update(conversationRef, {
+        lastMessage: "",
+        lastMessageId: "",
+        unreadCounts: Object.fromEntries(participants.map((participant) => [participant, 0])),
+        readAt: {},
+        typing: {},
+      });
+    }
+  });
+  await synchronizeConversationBlockState(participants.join("_"), participants);
+}
+
+export const blockChatUser = onCall(
+  { timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    const uid = authenticatedUid(request.auth?.uid);
+    const targetUid = stringValue(request.data?.targetId);
+    if (!targetUid || targetUid === uid) {
+      throw new HttpsError("invalid-argument", "Choose a valid account.");
+    }
+    await updateChatBlockStatus(uid, targetUid, true);
+    return { blocked: true };
+  }
+);
+
+export const unblockChatUser = onCall(
+  { timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    const uid = authenticatedUid(request.auth?.uid);
+    const targetUid = stringValue(request.data?.targetId);
+    if (!targetUid || targetUid === uid) {
+      throw new HttpsError("invalid-argument", "Choose a valid account.");
+    }
+    await updateChatBlockStatus(uid, targetUid, false);
+    return { unblocked: true };
+  }
+);
+
+export const synchronizeMyChatBlockStates = onCall(
+  { timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    const uid = authenticatedUid(request.auth?.uid);
+    const migrationRef = db.collection("chatSecurityMigrations").doc(uid);
+    const migration = await migrationRef.get();
+    if (migration.get("version") === 1) return { synchronized: 0 };
+
+    const conversations = await db.collection("conversations")
+      .where("userIds", "array-contains", uid)
+      .get();
+    let synchronized = 0;
+    for (const conversation of conversations.docs) {
+      const participants = conversation.get("userIds");
+      if (!Array.isArray(participants) || participants.length !== 2) continue;
+      await synchronizeConversationBlockState(conversation.id, participants);
+      synchronized += 1;
+    }
+    await migrationRef.set({ version: 1, updatedAt: FieldValue.serverTimestamp() });
+    return { synchronized };
   }
 );
 

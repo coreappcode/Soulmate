@@ -26,7 +26,10 @@ service cloud.firestore {
       }
 
       match /settings/{settingId} {
-        allow read, write: if signedIn() && request.auth.uid == userId;
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow write: if signedIn()
+          && request.auth.uid == userId
+          && settingId != 'chatSecurity';
       }
 
       match /blocks/{blockedUserId} {
@@ -98,6 +101,13 @@ service cloud.firestore {
           : resource.data.userIds[0];
       }
 
+      function usersHaveNotBlocked(firstUid, secondUid) {
+        return !exists(
+            /databases/$(database)/documents/users/$(firstUid)/blocks/$(secondUid))
+          && !exists(
+            /databases/$(database)/documents/users/$(secondUid)/blocks/$(firstUid));
+      }
+
       function participantsHaveNotBlockedEachOther(conversationId) {
         let participants = get(
           /databases/$(database)/documents/conversations/$(conversationId)
@@ -105,10 +115,7 @@ service cloud.firestore {
         let otherUid = participants[0] == request.auth.uid
           ? participants[1]
           : participants[0];
-        return !exists(
-            /databases/$(database)/documents/users/$(request.auth.uid)/blocks/$(otherUid))
-          && !exists(
-            /databases/$(database)/documents/users/$(otherUid)/blocks/$(request.auth.uid));
+        return usersHaveNotBlocked(request.auth.uid, otherUid);
       }
 
       function validMessageUpdate() {
@@ -152,7 +159,31 @@ service cloud.firestore {
           && (!changedKeys.hasAny(['readAt'])
             || newReadAt.get(uid, null) == request.time)
           && (changedKeys.hasAny(['readAt'])
-            || newReadAt.get(uid, null) == oldReadAt.get(uid, null));
+            || newReadAt.get(uid, null) == oldReadAt.get(uid, null))
+          && participantsHaveNotBlockedEachOther(conversationId);
+      }
+
+      function validBlockStateUpdate() {
+        let uid = request.auth.uid;
+        let otherUid = otherParticipant();
+        let unreadCounts = request.resource.data.get('unreadCounts', {});
+        let readAt = request.resource.data.get('readAt', {});
+        let typing = request.resource.data.get('typing', {});
+        let blockPath = /databases/$(database)/documents/users/$(uid)/blocks/$(otherUid);
+        let reverseBlockPath = /databases/$(database)/documents/users/$(otherUid)/blocks/$(uid);
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastMessage', 'lastMessageId', 'unreadCounts', 'readAt', 'typing'
+          ])
+          && (existsAfter(blockPath) || existsAfter(reverseBlockPath))
+          && request.resource.data.get('lastMessage', '') == ''
+          && request.resource.data.get('lastMessageId', '') == ''
+          && unreadCounts.keys().hasOnly(resource.data.userIds)
+          && unreadCounts.get(uid, 0) == 0
+          && unreadCounts.get(otherUid, 0) == 0
+          && readAt.keys().hasOnly(resource.data.userIds)
+          && readAt.size() == 0
+          && typing.keys().hasOnly(resource.data.userIds)
+          && typing.size() == 0;
       }
 
       function validTypingUpdate() {
@@ -188,12 +219,24 @@ service cloud.firestore {
 
       allow read: if signedIn() && request.auth.uid in resource.data.userIds;
       allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userIds', 'archivedBy', 'lastMessage', 'unreadCounts', 'updatedAt', 'createdAt'
+        ])
         && request.auth.uid in request.resource.data.userIds
         && request.resource.data.userIds.size() == 2
         && request.resource.data.userIds[0] < request.resource.data.userIds[1]
         && conversationId == request.resource.data.userIds[0] + '_' + request.resource.data.userIds[1]
+        && request.resource.data.archivedBy == []
+        && request.resource.data.lastMessage == ''
         && request.resource.data.get('unreadCounts', {}).keys()
           .hasOnly(request.resource.data.userIds)
+        && request.resource.data.unreadCounts.get(request.resource.data.userIds[0], 0) == 0
+        && request.resource.data.unreadCounts.get(request.resource.data.userIds[1], 0) == 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.createdAt == request.time
+        && usersHaveNotBlocked(
+          request.resource.data.userIds[0],
+          request.resource.data.userIds[1])
         && (existsAfter(/databases/$(database)/documents/matches/$(conversationId))
           || existsAfter(/databases/$(database)/documents/friendships/$(conversationId)));
       allow update: if signedIn()
@@ -202,7 +245,8 @@ service cloud.firestore {
         && (validMessageUpdate()
           || validReadUpdate()
           || validTypingUpdate()
-          || validArchiveUpdate());
+          || validArchiveUpdate()
+          || validBlockStateUpdate());
       allow delete: if false;
 
       match /messages/{messageId} {

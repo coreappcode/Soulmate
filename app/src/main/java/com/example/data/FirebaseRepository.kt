@@ -10,6 +10,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.tasks.await
@@ -227,6 +228,10 @@ class FirebaseRepository(
 
     suspend fun loadDashboard(): FirebaseDashboardData {
         val uid = requireCurrentUid()
+        FirebaseFunctions.getInstance("asia-southeast1")
+            .getHttpsCallable("synchronizeMyChatBlockStates")
+            .call()
+            .await()
         val ownProfile = firestore.collection("profiles").document(uid).get().await()
         val ownInterests = ownProfile.get("interests").stringList().toSet()
         val profileSnapshots = firestore.collection("profiles").limit(100).get().await()
@@ -958,15 +963,24 @@ class FirebaseRepository(
 
     suspend fun blockUser(targetId: String) {
         val uid = requireCurrentUid()
-        firestore.collection("users").document(uid).collection("blocks")
-            .document(targetId)
-            .set(mapOf("createdAt" to FieldValue.serverTimestamp())).await()
+        require(targetId.isNotBlank() && targetId != uid) {
+            "You cannot block this account."
+        }
+        FirebaseFunctions.getInstance("asia-southeast1")
+            .getHttpsCallable("blockChatUser")
+            .call(mapOf("targetId" to targetId))
+            .await()
     }
 
     suspend fun unblockUser(targetId: String) {
         val uid = requireCurrentUid()
-        firestore.collection("users").document(uid).collection("blocks")
-            .document(targetId).delete().await()
+        require(targetId.isNotBlank() && targetId != uid) {
+            "You cannot unblock this account."
+        }
+        FirebaseFunctions.getInstance("asia-southeast1")
+            .getHttpsCallable("unblockChatUser")
+            .call(mapOf("targetId" to targetId))
+            .await()
     }
 
     suspend fun submitUserReport(targetId: String, reason: String, details: String) {

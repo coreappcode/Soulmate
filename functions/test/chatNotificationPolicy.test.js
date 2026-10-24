@@ -1,6 +1,9 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { shouldNotifyChatMessage } = require("../lib/chatNotificationPolicy.js");
+const {
+  shouldNotifyChatMessage,
+  shouldRetryChatNotificationFailure,
+} = require("../lib/chatNotificationPolicy.js");
 
 test("chat notifications require global messages enabled", () => {
   assert.equal(shouldNotifyChatMessage({
@@ -29,4 +32,11 @@ test("enabled and unmuted unblocked conversations send notifications", () => {
     conversationMuted: false,
     hasBlock: false,
   }), true);
+});
+
+test("temporary FCM failures are retried but invalid tokens are not", () => {
+  assert.equal(shouldRetryChatNotificationFailure("messaging/server-unavailable"), true);
+  assert.equal(shouldRetryChatNotificationFailure("messaging/internal-error"), true);
+  assert.equal(shouldRetryChatNotificationFailure("messaging/invalid-registration-token"), false);
+  assert.equal(shouldRetryChatNotificationFailure(undefined), false);
 });

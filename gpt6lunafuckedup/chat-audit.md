@@ -4,9 +4,10 @@
 Storage rules, Cloud Functions, and message notifications.
 
 **Fix status:** Code-level fixes were made for all numbered findings by
-**GPT-6 LUNA**. Backend changes are not deployed yet, and no physical-device
-workflow was tested. Finding 2 has an explicit limitation for previously
-issued Firebase Storage download URLs.
+**GPT-6 LUNA**. The current Firestore rules and Functions changes were deployed
+to `soulmate-e285e` on 2026-10-24. The Android changes are source-only and still
+need to be released to users. The new app runs a one-time migration for existing
+blocked conversations; no physical-device workflow has been tested.
 
 ## High priority
 
@@ -25,12 +26,12 @@ Evidence: [MainActivity.kt](../app/src/main/java/com/example/MainActivity.kt),
 
 ### 2. Blocking does not stop chat messages or attachment access — FIXED BY GPT-6 LUNA
 
-Firestore rules now deny message creation, message reads, and message/unread
-updates when either participant has blocked the other. Storage SDK reads and
-writes are likewise denied for blocked pairs. Previously issued Firebase
-Storage download URLs are bearer links and remain usable by anyone who already
-has the URL; token migration or revocation is still needed to remove that
-legacy limitation.
+Firestore rules deny message creation, message reads, and read/unread updates
+when either participant has blocked the other. Blocking clears the conversation
+preview/read state immediately, and a backend synchronization rotates Firebase
+Storage download tokens for that conversation. The new Android app runs a
+one-time migration for existing blocks. Files already downloaded or copied
+outside the app cannot be revoked.
 
 Evidence: [FirebaseRepository.kt](../app/src/main/java/com/example/data/FirebaseRepository.kt),
 [firestore.rules](../firestore.rules),
@@ -135,15 +136,41 @@ Evidence: [ExampleUnitTest.kt](../app/src/test/java/com/example/ExampleUnitTest.
 
 Validation passed:
 
-- `gradle :app:testDebugUnitTest --rerun-tasks`
-- `cd functions && npm test` (TypeScript build and three notification policy tests)
-- Firestore and Storage emulator requests returned expected `403` for unauthenticated reads.
-- Firestore index JSON validation and `git diff --check`
+- `gradle --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx2g -Dfile.encoding=UTF-8' :app:testDebugUnitTest --rerun-tasks`
+- `cd functions && npm test` (TypeScript build and seven notification/Storage URL policy tests)
+- `cd functions && npm run test:rules` (five authenticated Firestore rules tests)
+- `cd functions && npm audit --omit=dev` (no production dependency vulnerabilities)
+- `git diff --check`
 
 The live message listener, read receipts/unread counts, typing indicators, and
-per-chat mute behavior remain wired in source. Firestore rules, Storage rules,
-indexes, and Functions changes still need deployment to affect the production
-Firebase project. Authenticated rules behavior and the full call, notification,
-attachment, and navigation flows still need device/emulator integration
-testing. Previously issued Storage download URLs remain bearer links as noted
-under finding 2.
+per-chat mute behavior remain wired in source. Firestore rules and Functions
+were deployed to `soulmate-e285e`; Storage rules and indexes were deployed in
+the earlier rollout and were unchanged in this pass. The deployed Functions
+include block/unblock handlers, block-state migration/token rotation, and
+retry-enabled message notifications. `firebase functions:list` confirmed the
+new functions are present.
+
+The updated Android app has not been released or tested on a physical device.
+Its startup migration has not run for existing users until they use that
+updated app. Call, notification, attachment, and navigation workflows still
+need device-level integration testing.
+
+## Follow-up audit findings fixed — FIXED BY GPT-6 LUNA
+
+### 13. Blocked users could update read receipts and unread counts
+
+The Firestore read-update rule now checks both block directions. The block
+flow clears the preview, unread counts, read receipts, and typing state. The
+Functions synchronization also sanitizes existing blocked conversations.
+
+### 14. Conversation creation accepted fabricated previews
+
+Conversation creation now permits only the canonical empty state, with exact
+fields, zero unread counts, and server timestamps. It is denied if either
+participant has blocked the other.
+
+### 15. Transient chat notification failures were not retried
+
+The message-created trigger now retries transient FCM failures. Invalid tokens
+are removed, and Android notifications use a stable per-conversation identity
+to reduce duplicate alerts during a retry.

@@ -7,7 +7,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test test/*.test.js"
+    "test": "npm run build && node --test test/chatNotificationPolicy.test.js test/chatAttachmentSecurity.test.js",
+    "test:rules": "firebase emulators:exec --only auth,firestore --project soulmate-chat-rules-test \"node --test test/firestoreChatRules.test.js\""
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",
