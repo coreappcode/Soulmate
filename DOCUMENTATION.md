@@ -6,7 +6,7 @@
 
 - **Application Name:** Soulmate
 - **Kotlin Namespace:** `com.example`
-- **Android Application ID:** `com.soulmate.androidapp`
+- **Android Application ID:** `com.soulmate.android`
 - **Architecture:** Single-Activity MVVM (Model-View-ViewModel) built 100% in Kotlin & Jetpack Compose
 - **Design System:** Custom Material Design 3 (M3) "Aurora Warm" Design System with Edge-to-Edge system insets
 - **Header & Navbar Theme:** Tinder-Model Iconic Pink (`#FD3A73`) for all Top App Bar headers and Bottom Navigation Bar tabs
@@ -17,13 +17,13 @@
 
 ### Firebase Backend Connections and Work Completed
 
-- **Firebase project:** `soulmate-e285e`; the Android app registered for this package is `com.soulmate.androidapp`. Firebase configuration is checked in at the repository root and in `app/google-services.json`; both copies must remain synchronized.
+- **Firebase project:** `soulmate-e285e`; the Android app registered for this package is `com.soulmate.android`. Firebase configuration is checked in at the repository root and in `app/google-services.json`; both copies must remain synchronized.
 - **Authentication:** Firebase Phone Authentication sends and verifies SMS OTPs. The verified Firebase credential signs in the user; changing an existing account's phone number also requires OTP verification. The app supplies its Activity to Firebase Auth. Firebase chooses app verification: Play Integrity on eligible Google Play installations, with reCAPTCHA as an SDK fallback when Play Integrity is unavailable. There is no supported production setting to disable this fallback while continuing to use Firebase Phone Auth.
 - **Firestore:** `FirebaseRepository` is the app's data boundary. Private profile data and onboarding drafts are stored under `users/{uid}`; public discovery profiles under `profiles/{uid}`; normalized username claims under `usernames/{username}`; user preferences under `users/{uid}/settings`; blocks under `users/{uid}/blocks`. Swipes, matches, friend requests, friendships, conversations, and conversation messages use their corresponding top-level collections, with messages nested under each conversation.
 - **Profile privacy:** Public profiles omit age when the owner disables age visibility. Discovery, friend, profile, and chat displays use the privacy-aware age labels. The other privacy toggles are stored but are not enforced because online presence, distance visibility, non-friend messaging controls, and read receipts are not implemented.
 - **Firebase Storage:** Profile images are uploaded under `users/{uid}/profile/`, private selfie uploads under `users/{uid}/verification/`, and chat attachments under `conversations/{conversationId}/`. Uploads are initiated only after selection/capture through Android system pickers and camera contracts; profile images are cropped before upload.
 - **Backend deployment:** `firebase.json` points to `firestore.rules`, `firestore.indexes.json`, and `storage.rules`. Firestore rules and indexes and Storage rules were deployed to `soulmate-e285e` on October 22, 2026. Redeploy them whenever these checked-in deployment files change.
-- **Mock-flow cleanup:** Removed seeded mock data and simulated identity-verification completion. A captured selfie is stored privately and does not grant a verified badge. Billing, account deletion/deactivation, data export, live presence, precise-distance matching, push/email delivery, and moderation are not backed by configured services and are presented as unavailable or limited.
+- **Mock-flow cleanup:** Removed seeded mock data and simulated identity-verification completion. A captured selfie is stored privately and does not grant a verified badge. Play Billing purchase, verification, and entitlement code is implemented; Play Console product setup and service-account access are still required before purchases can work in production. Account deletion/deactivation, data export, live presence, precise-distance matching, push/email delivery, and moderation remain unconfigured or limited.
 - **Device integrations:** Onboarding uses actual Android runtime permission results. Photo selection uses the Android Photo Picker; camera capture uses the system camera with a FileProvider; profile cropping is performed before upload.
 - **Setup and validation notes:** Phone sign-in is enabled in Firebase Authentication. The local debug certificate's SHA-1 and SHA-256 are registered for this Android app. The Play app-signing SHA-256 still must be registered for Play Integrity; add the Play app-signing SHA-1 as well for the reCAPTCHA fallback. Use a Google Play-installed build on a Play Integrity-supported device to minimize browser verification; sideloaded builds and devices without Google Play services can still use Firebase's web fallback.
 - **Release signing:** Keep the release keystore out of Git. Supply `KEYSTORE_PATH`, `STORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` through a secure local environment or CI secret store when building a signed release. These values are not embedded in the project.
@@ -368,7 +368,7 @@ The application consists of **56 complete UI screens** organized into 9 logical 
   - "Clear Chat History" hides existing messages only for the signed-in user; the other participant's history is unchanged.
   - "Block User" → blocks the user and returns to Chat List.
   - "Report User" → submits a report to the private Firestore `reports` collection. Reports are not readable by clients and require a separately configured moderation review process.
-  - "Mute Notifications" and audio/video calling remain unavailable until their provider integrations are configured.
+  - Audio and video calls are available only when both participants have an active Soulmate Pro subscription.
 - **Buttons:** Action list items.
 - **Icons:** `Icons.Default.Person`, `Icons.Default.NotificationsOff`, `Icons.Default.Block`, `Icons.Default.Report`, `Icons.Default.Delete`.
 
@@ -503,11 +503,11 @@ The application consists of **56 complete UI screens** organized into 9 logical 
 #### 38. Pro Plans Screen
 - **Route:** `settings/pro_plans` (`Routes.SETTINGS_PRO_PLANS`)
 - **File:** `ui/screens/settings/ProPlansScreen.kt`
-- **Description:** Subscription tier comparison (Soulmate Free vs. Soulmate Gold / Platinum): Unlimited Likes, Rewinds, Global Passport, 5 Superlikes/week.
+- **Description:** Soulmate Pro subscriptions provide unlimited swipes and rewinds plus audio and video calling. Call access is checked by the server for both participants.
 - **Navigations:**
   - Back Button → returns to Settings Hub.
-  - "Upgrade to Gold" → activates Pro state in ViewModel (`isProUser = true`) and displays celebration banner.
-- **Buttons:** Tier selector cards, `GradientButton` ("Upgrade to Soulmate Gold").
+  - Purchase and restore use Google Play Billing and server-verified subscription entitlements.
+- **Buttons:** Subscription plan selectors, purchase, and restore controls.
 - **Icons:** `Icons.Default.Star`, `Icons.Default.CheckCircle`, `Icons.Default.Bolt`.
 
 #### 39. Terms Screen
@@ -800,13 +800,27 @@ The app uses Firebase Authentication, Cloud Firestore, and Firebase Storage for 
 | **SMS OTP Verification** | `PhoneEntryScreen.kt`, `OtpVerifyScreen.kt`, `PhoneNumberScreen.kt` | Firebase Phone Auth sends/resends the SMS, signs the user in with the verified credential, and updates an existing account phone only after OTP verification. Firebase uses Play Integrity when eligible and can fall back to reCAPTCHA; the Android SDK does not provide a production option to disable that fallback. | Enable Phone sign-in; register the Play app-signing SHA-256 for Play Integrity and SHA-1 for reCAPTCHA fallback. Install through Google Play and use a supported device to avoid the web fallback where possible. |
 | **Profile and username claims** | Onboarding and profile screens | Draft/private data and public profiles are stored in Firestore; username claims are transactional. | Firestore rules and indexes are deployed; re-deploy after changes. |
 | **Peer-to-peer chat** | `ChatThreadScreen.kt`, `SendAttachmentScreen.kt` | Messages and conversations use Firestore; supported attachments upload to Storage. | Firestore/Storage rules and indexes are deployed; re-deploy after changes. |
-| **Friends and matchmaking** | Explore and Friends screens | Swipes, matches, friend requests, friendships, blocks, and settings use Firestore. | Location-distance ranking and live presence are not configured. |
+| **Friends and matchmaking** | Explore and Friends screens | Swipes and rewinds use authenticated Cloud Functions; free swipe limits are enforced in a server transaction. Matches, friend requests, friendships, blocks, and settings use Firestore. | Location-distance ranking and live presence are not configured. |
 | **User reports** | Chat Info and Chat Options screens | Reports are stored in the private Firestore `reports` collection. Reporters cannot read or modify submitted reports. | A moderation review interface/process is not configured; reports are not automatically reviewed. |
 | **Identity verification** | `FaceCaptureScreen.kt`, `VerificationStatusScreen.kt` | A selfie can be stored privately; the UI never marks it verified. | A real identity-review provider is not configured. |
-| **In-App Billing** | `ProPlansScreen.kt` | Purchases and restore are explicitly unavailable; no subscription is activated. | Google Play Billing and Play Console products are not configured. |
+| **In-App Billing** | `ProPlansScreen.kt`, `GooglePlayBillingManager.kt` | Google Play Billing loads localized subscription prices; purchase and restore tokens are verified through the Google Play Android Publisher API before server-side Pro access is granted. | Configure the Play Console products and grant the Firebase Functions runtime service identity access to subscription data. Deploy Functions and Firestore rules before release. |
 | **Account deletion** | `DeleteAccountScreen.kt` | The screen states that deletion is unavailable and makes no account changes. | A secure deletion backend is not configured. |
 
-Before testing SMS sign-in, confirm **Phone** is enabled under Firebase Console → Authentication → Sign-in method. The local debug certificate's SHA-1 and SHA-256 are registered for `com.soulmate.androidapp`; add the Play app-signing SHA-256 fingerprint for Play Integrity and SHA-1 for the reCAPTCHA fallback. The Android Firebase config must be available as `app/google-services.json`. Use Firebase Authentication test phone numbers during development to avoid sending real SMS messages. Firebase may open its reCAPTCHA web flow when app verification cannot use Play Integrity; this fallback cannot be disabled in production while retaining Firebase Phone Auth.
+Before testing SMS sign-in, confirm **Phone** is enabled under Firebase Console → Authentication → Sign-in method. The local debug certificate's SHA-1 and SHA-256 are registered for `com.soulmate.android`; add the Play app-signing SHA-256 fingerprint for Play Integrity and SHA-1 for the reCAPTCHA fallback. The Android Firebase config must be available as `app/google-services.json`. Use Firebase Authentication test phone numbers during development to avoid sending real SMS messages. Firebase may open its reCAPTCHA web flow when app verification cannot use Play Integrity; this fallback cannot be disabled in production while retaining Firebase Phone Auth.
+
+### Google Play Pro subscription setup
+
+The Android app expects three Play Console subscription product IDs:
+
+| Product ID | Billing period | Base price in USD |
+| --- | --- | ---: |
+| `soulmate_pro_monthly` | 1 month | $2.00 |
+| `soulmate_pro_quarterly` | 3 months | $4.00 |
+| `soulmate_pro_yearly` | 1 year | $10.00 |
+
+Create each product and an active base plan in Play Console. Set the listed USD price, then configure or review country-specific prices so Google Play presents the intended local-currency equivalent. The app displays the localized price returned by Google Play; it does not perform currency conversion itself. Add the signed app to a Play testing track and add license testers before testing purchase and restore flows.
+
+Enable the Google Play Android Developer API and grant the deployed Firebase Functions runtime service identity permission to verify subscriptions for this app in Play Console. The backend uses Application Default Credentials; no Play service-account key is stored in the app. Deploy the updated Cloud Functions before releasing the app. Deploy the Firestore rules that deny direct client swipe writes as part of the rollout; once those rules are active, older app versions that still write swipes directly will not be able to swipe. Free swipe allowance resets at 00:00 UTC; Pro subscriptions are periodically revalidated with Google Play.
 
 Run `firebase emulators:exec --only auth,firestore,storage --project demo-soulmate "node scripts/firebase-rules-smoke.mjs"` to validate authenticated draft/profile/username writes, private-document access controls, report submission/privacy, age-visibility updates, and profile image Storage rules without modifying production data. The script removes only its own mutable fixtures and Auth user; the unmodifiable report test fixture is discarded when the emulator shuts down.
 

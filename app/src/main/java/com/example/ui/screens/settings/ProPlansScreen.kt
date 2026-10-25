@@ -1,6 +1,5 @@
 package com.example.ui.screens.settings
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,17 +19,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.GooglePlayBillingManager
+import com.example.data.GooglePlayPlan
 import com.example.ui.components.GradientButton
 import com.example.ui.components.SoulTextButton
 import com.example.ui.components.SoulTopBar
@@ -51,19 +56,46 @@ import com.example.ui.theme.CardBackground
 import com.example.ui.theme.ElevatedSurface
 import com.example.ui.theme.InterFontFamily
 import com.example.ui.theme.OrchidPrimary
-import com.example.ui.theme.PillShape
-import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.SemanticOnline
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.utils.findActivity
 
 @Composable
 fun ProPlansScreen(
+    isPro: Boolean,
+    onVerifyPurchase: suspend (purchaseToken: String, productId: String) -> Unit,
+    onAccessUpdated: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    var selectedPlan by remember { mutableIntStateOf(1) } // 0: Monthly, 1: 3-Months (Save 20%), 2: Lifetime (Best Value)
-    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val billingManager = remember(context, scope) {
+        GooglePlayBillingManager(
+            context = context,
+            scope = scope,
+            verifyPurchase = onVerifyPurchase,
+            onAccessUpdated = onAccessUpdated
+        )
+    }
+    val plans by billingManager.plans.collectAsState()
+    val isReady by billingManager.isReady.collectAsState()
+    val isProcessing by billingManager.isProcessing.collectAsState()
+    val billingMessage by billingManager.message.collectAsState()
+    var selectedProductId by remember { mutableStateOf("soulmate_pro_monthly") }
+    val selectedPlan = plans.firstOrNull { it.productId == selectedProductId }
+        ?: plans.firstOrNull()
+
+    LaunchedEffect(plans) {
+        if (plans.none { it.productId == selectedProductId }) {
+            plans.firstOrNull()?.let { selectedProductId = it.productId }
+        }
+    }
+
+    DisposableEffect(billingManager) {
+        billingManager.connect()
+        onDispose { billingManager.disconnect() }
+    }
 
     Column(
         modifier = Modifier
@@ -81,26 +113,27 @@ fun ProPlansScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(scrollState)
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Gradient Hero
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp))
                     .background(AuroraHorizontalGradient)
-                    .border(2.dp, Color(0xFF000000), RoundedCornerShape(24.dp))
+                    .border(2.dp, Color.Black, RoundedCornerShape(24.dp))
                     .padding(24.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Box(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(Color.White)
-                            .border(1.5.dp, Color(0xFF000000), CircleShape),
+                            .background(Color.White),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -110,21 +143,21 @@ fun ProPlansScreen(
                             modifier = Modifier.size(36.dp)
                         )
                     }
-
                     Spacer(modifier = Modifier.height(12.dp))
-
                     Text(
                         text = "Soulmate Pro",
-                        fontFamily = PoppinsFontFamily,
+                        fontFamily = InterFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 24.sp,
                         color = Color.White
                     )
-
                     Spacer(modifier = Modifier.height(4.dp))
-
                     Text(
-                        text = "Subscriptions are not available in this app build.",
+                        text = if (isPro) {
+                            "Your Pro subscription is active."
+                        } else {
+                            "Unlimited swipes. Rewind any swipe."
+                        },
                         fontFamily = InterFontFamily,
                         fontSize = 13.sp,
                         color = Color.White.copy(alpha = 0.9f),
@@ -135,35 +168,18 @@ fun ProPlansScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Text(
-                text = "The benefits and prices below are examples only. No purchase can be made or restored here.",
-                fontFamily = InterFontFamily,
-                fontSize = 13.sp,
-                color = TextSecondary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Feature List
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.5.dp, Color(0xFF000000), RoundedCornerShape(20.dp))
+                    .border(1.5.dp, Color.Black, RoundedCornerShape(20.dp))
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    listOf(
-                        "Planned: unlimited rewinds" to true,
-                        "Planned: see who likes you" to true,
-                        "Planned: global discovery" to true,
-                        "Planned: weekly introductions" to true,
-                        "Planned: ad-free experience" to true
-                    ).forEach { (feat, _) ->
+                    listOf("Unlimited daily swipes", "Unlimited rewinds").forEach { feature ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 5.dp)
+                            modifier = Modifier.padding(vertical = 6.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -181,9 +197,9 @@ fun ProPlansScreen(
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = feat,
+                                text = feature,
                                 fontFamily = InterFontFamily,
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 color = TextPrimary
                             )
                         }
@@ -191,137 +207,147 @@ fun ProPlansScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // 3 Pricing Cards (Monthly / 3 Months Save 20% / Lifetime Best Value)
-            val plans = listOf(
-                Triple("Monthly", "$9.99 / mo", "Example only — unavailable"),
-                Triple("3 Months", "$7.99 / mo", "Example only — unavailable"),
-                Triple("Lifetime", "$49.99 once", "Example only — unavailable")
-            )
-
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                plans.forEachIndexed { index, (name, price, desc) ->
-                    val isSelected = selectedPlan == index
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = if (isSelected) ElevatedSurface else Color.White),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(
-                                width = if (isSelected) 2.5.dp else 1.5.dp,
-                                color = if (isSelected) OrchidPrimary else Color(0xFF000000),
-                                shape = RoundedCornerShape(18.dp)
-                            )
-                            .clickable { selectedPlan = index }
-                            .testTag("pricing_plan_$index")
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = name,
-                                        fontFamily = PoppinsFontFamily,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
-                                        color = TextPrimary
-                                    )
-                                    if (index == 1) {
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(PillShape)
-                                                .background(OrchidPrimary)
-                                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "SAVE 20%",
-                                                fontFamily = PoppinsFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 9.sp,
-                                                color = Color.White
-                                            )
-                                        }
-                                    } else if (index == 2) {
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(PillShape)
-                                                .background(Color(0xFF2563EB))
-                                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "BEST VALUE",
-                                                fontFamily = PoppinsFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 9.sp,
-                                                color = Color.White
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = desc,
-                                    fontFamily = InterFontFamily,
-                                    fontSize = 12.sp,
-                                    color = TextSecondary
-                                )
-                            }
-
-                            Text(
-                                text = price,
-                                fontFamily = PoppinsFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = if (isSelected) OrchidPrimary else TextPrimary
-                            )
-                        }
+            if (plans.isEmpty()) {
+                if (billingMessage == null) {
+                    CircularProgressIndicator(color = OrchidPrimary)
+                }
+                Text(
+                    text = billingMessage
+                        ?: if (isReady) "Loading plans from Google Play…" else "Connecting to Google Play…",
+                    fontFamily = InterFontFamily,
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    plans.forEachIndexed { index, plan ->
+                        PlanCard(
+                            plan = plan,
+                            selected = selectedPlan?.productId == plan.productId,
+                            index = index,
+                            onClick = { selectedProductId = plan.productId }
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            if (!billingMessage.isNullOrBlank()) {
+                Text(
+                    text = billingMessage.orEmpty(),
+                    fontFamily = InterFontFamily,
+                    fontSize = 13.sp,
+                    color = if (isPro) SemanticOnline else TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                )
+            }
 
-            // Restore Purchases Link
             SoulTextButton(
-                text = "Restore Purchases",
-                onClick = {
-                    Toast.makeText(
-                        context,
-                        "Purchase restoration is not configured. No changes were made.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                text = "Restore purchases",
+                onClick = billingManager::restorePurchases,
+                modifier = Modifier.padding(top = 8.dp)
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Subscriptions renew automatically unless canceled in Google Play. Prices and currency are provided by Google Play for your country.",
+                fontFamily = InterFontFamily,
+                fontSize = 11.sp,
+                color = TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
+            )
         }
 
-        // Sticky Subscribe Gradient button
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(AppBackground)
-                .border(width = 1.dp, color = Color(0xFF000000).copy(alpha = 0.08f))
+                .border(width = 1.dp, color = Color.Black.copy(alpha = 0.08f))
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
+            val activity = context.findActivity()
             GradientButton(
-                text = "Purchases unavailable",
-                onClick = {
-                    Toast.makeText(
-                        context,
-                        "Billing is not configured. No purchase was made.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                text = when {
+                    isPro -> "Soulmate Pro active"
+                    isProcessing -> "Verifying purchase…"
+                    selectedPlan != null -> "Subscribe — ${selectedPlan.formattedPrice}"
+                    else -> "Plans unavailable"
                 },
+                onClick = {
+                    if (activity != null && selectedPlan != null && !isPro && !isProcessing) {
+                        billingManager.purchase(activity, selectedPlan.productId)
+                    }
+                },
+                enabled = activity != null && selectedPlan != null && isReady && !isPro && !isProcessing,
                 modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlanCard(
+    plan: GooglePlayPlan,
+    selected: Boolean,
+    index: Int,
+    onClick: () -> Unit
+) {
+    val cadence = when (plan.productId) {
+        "soulmate_pro_monthly" -> "Billed monthly"
+        "soulmate_pro_quarterly" -> "Billed every 3 months"
+        "soulmate_pro_yearly" -> "Billed yearly"
+        else -> "Subscription"
+    }
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) ElevatedSurface else Color.White
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = if (selected) 2.5.dp else 1.5.dp,
+                color = if (selected) OrchidPrimary else Color.Black,
+                shape = RoundedCornerShape(18.dp)
+            )
+            .clickable(onClick = onClick)
+            .testTag("pricing_plan_$index")
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = plan.displayName,
+                    fontFamily = InterFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = cadence,
+                    fontFamily = InterFontFamily,
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+            }
+            Text(
+                text = plan.formattedPrice,
+                fontFamily = InterFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = if (selected) OrchidPrimary else TextPrimary
             )
         }
     }

@@ -16,8 +16,8 @@ android {
     applicationId = "com.soulmate.android"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
-    versionName = "1.0.4"
+    versionCode = 5
+    versionName = "1.0.5"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -110,6 +110,7 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.android.image.cropper)
   implementation(libs.androidx.appcompat)
+  implementation(libs.play.billing)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:

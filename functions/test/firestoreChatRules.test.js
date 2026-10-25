@@ -250,3 +250,22 @@ test("profile documents and username claims can only be written by trusted backe
     }, { exists: false }),
   ], alice.idToken));
 });
+
+test("clients cannot write swipes, Pro entitlements, or daily quota records directly", async () => {
+  const protectedWrites = [
+    updateWrite(`swipes/${alice.localId}_${bob.localId}`, {
+      senderId: alice.localId,
+      recipientId: bob.localId,
+      liked: true,
+    }, { exists: false }),
+    updateWrite(`billingEntitlements/${alice.localId}`, { isPro: true }, { exists: false }),
+    updateWrite(`dailySwipeUsage/${alice.localId}_2026-10-25`, {
+      uid: alice.localId,
+      swipesUsed: 0,
+    }, { exists: false }),
+  ];
+
+  for (const write of protectedWrites) {
+    await assert.rejects(commit([write], alice.idToken));
+  }
+});

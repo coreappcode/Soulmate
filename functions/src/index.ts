@@ -3,6 +3,7 @@ import { initializeApp } from "firebase-admin/app";
 import { FieldPath, FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
+import { GoogleAuth } from "google-auth-library";
 import { AccessToken } from "livekit-server-sdk";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
@@ -22,6 +23,14 @@ import {
   InvalidProfileError,
   validateProfilePayload,
 } from "./profileValidation.js";
+import {
+  canStartCall,
+  canRecordSwipe,
+  FREE_DAILY_SWIPE_LIMIT,
+  hasActiveProSubscription,
+  remainingFreeSwipes,
+  utcDayKey,
+} from "./proPolicy.js";
 
 initializeApp();
 setGlobalOptions({ region: "asia-southeast1", maxInstances: 10 });
@@ -35,6 +44,114 @@ const liveKitUrl = defineString("LIVEKIT_URL", {
 const db = getFirestore();
 const RING_TIMEOUT_MS = 45_000;
 const CALL_LEASE_MS = 90_000;
+const PRO_PACKAGE_NAME = "com.soulmate.android";
+const PRO_PRODUCT_IDS = new Set([
+  "soulmate_pro_monthly",
+  "soulmate_pro_quarterly",
+  "soulmate_pro_yearly",
+]);
+const androidPublisherAuth = new GoogleAuth({
+  scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+});
+
+type PlaySubscriptionResponse = {
+  subscriptionState?: string;
+  lineItems?: Array<{
+    productId?: string;
+    expiryTime?: string;
+  }>;
+};
+
+async function getPlaySubscription(
+  purchaseToken: string,
+): Promise<PlaySubscriptionResponse | null> {
+  const client = await androidPublisherAuth.getClient();
+  const accessToken = await client.getAccessToken();
+  if (!accessToken) {
+    throw new HttpsError("internal", "Google Play verification is not configured.");
+  }
+
+  const response = await fetch(
+    `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PRO_PACKAGE_NAME}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    logger.error("Google Play subscription verification failed.", {
+      status: response.status,
+    });
+    throw new HttpsError(
+      "unavailable",
+      "Google Play verification is temporarily unavailable. Please try again.",
+    );
+  }
+  return await response.json() as PlaySubscriptionResponse;
+}
+
+function isCurrentPro(entitlement: FirebaseFirestore.DocumentSnapshot, now: number): boolean {
+  const expiresAt = entitlement.get("expiresAt");
+  return hasActiveProSubscription(
+    entitlement.get("isPro") === true,
+    entitlement.get("subscriptionState"),
+    expiresAt instanceof Timestamp ? expiresAt.toMillis() : Number.NaN,
+    now,
+  );
+}
+
+function assertCallParticipantsHavePro(
+  callerEntitlement: FirebaseFirestore.DocumentSnapshot,
+  calleeEntitlement: FirebaseFirestore.DocumentSnapshot,
+  now = Date.now(),
+): void {
+  if (!canStartCall(
+    isCurrentPro(callerEntitlement, now),
+    isCurrentPro(calleeEntitlement, now),
+  )) {
+    throw new HttpsError(
+      "permission-denied",
+      "Audio and video calls are available to active Soulmate Pro members only.",
+    );
+  }
+}
+
+async function refreshProEntitlement(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
+  const entitlementRef = db.collection("billingEntitlements").doc(uid);
+  const entitlement = await entitlementRef.get();
+  const purchaseToken = stringValue(entitlement.get("purchaseToken"));
+  const verifiedAt = entitlement.get("verifiedAt");
+  const now = Date.now();
+  if (!purchaseToken || !(verifiedAt instanceof Timestamp) ||
+      now - verifiedAt.toMillis() < 6 * 60 * 60 * 1000) {
+    return entitlement;
+  }
+
+  const purchase = await getPlaySubscription(purchaseToken);
+  if (!purchase) {
+    await entitlementRef.set({
+      isPro: false,
+      subscriptionState: null,
+      expiresAt: null,
+      verifiedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return entitlementRef.get();
+  }
+  const productId = stringValue(entitlement.get("productId"));
+  const lineItem = purchase.lineItems?.find((item) => item.productId === productId);
+  const expiryMillis = lineItem?.expiryTime ? Date.parse(lineItem.expiryTime) : Number.NaN;
+  const isPro = Boolean(
+    lineItem &&
+    hasActiveProSubscription(true, purchase.subscriptionState, expiryMillis, now),
+  );
+  await entitlementRef.set({
+    isPro,
+    subscriptionState: purchase.subscriptionState ?? null,
+    expiresAt: Number.isFinite(expiryMillis) ? Timestamp.fromMillis(expiryMillis) : null,
+    verifiedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return entitlementRef.get();
+}
 
 type CallRecord = {
   callerId: string;
@@ -585,21 +702,37 @@ export const createCall = onCall(async (request) => {
     const conversationRef = db.collection("conversations").doc(conversationId);
     const callerProfileRef = db.collection("profiles").doc(callerId);
     const calleeProfileRef = db.collection("profiles").doc(calleeId);
+    const callerEntitlementRef = db.collection("billingEntitlements").doc(callerId);
+    const calleeEntitlementRef = db.collection("billingEntitlements").doc(calleeId);
     const callerBlockRef = db.collection("users").doc(callerId).collection("blocks").doc(calleeId);
     const calleeBlockRef = db.collection("users").doc(calleeId).collection("blocks").doc(callerId);
     const callerDeviceRef = db.collection("users").doc(callerId)
       .collection("devices").doc(callerDeviceId);
     const deviceTokensRef = db.collection("users").doc(calleeId).collection("devices");
-    const [conversation, callerProfile, calleeProfile, callerBlock, calleeBlock, callerDevice, devices] =
+    const [
+      conversation,
+      callerProfile,
+      calleeProfile,
+      callerEntitlement,
+      calleeEntitlement,
+      callerBlock,
+      calleeBlock,
+      callerDevice,
+      devices,
+    ] =
       await Promise.all([
         conversationRef.get(),
         callerProfileRef.get(),
         calleeProfileRef.get(),
+        callerEntitlementRef.get(),
+        calleeEntitlementRef.get(),
         callerBlockRef.get(),
         calleeBlockRef.get(),
         callerDeviceRef.get(),
         deviceTokensRef.get(),
       ]);
+
+    assertCallParticipantsHavePro(callerEntitlement, calleeEntitlement);
 
     if (
       !conversation.exists ||
@@ -753,6 +886,12 @@ export const respondToCall = onCall(async (request) => {
       return { participants: currentCall.participants, accepted: false as const };
     }
 
+    const [callerEntitlement, calleeEntitlement] = await Promise.all([
+      transaction.get(db.collection("billingEntitlements").doc(currentCall.callerId)),
+      transaction.get(db.collection("billingEntitlements").doc(currentCall.calleeId)),
+    ]);
+    assertCallParticipantsHavePro(callerEntitlement, calleeEntitlement);
+
     const lockRefs = currentCall.participants.map((participantId) =>
       db.collection("callLocks").doc(participantId)
     );
@@ -810,7 +949,13 @@ export const getCallToken = onCall(
       throw new HttpsError("deadline-exceeded", "This call has expired.");
     }
 
-    const profile = await db.collection("profiles").doc(uid).get();
+    const [profile, callerEntitlement, calleeEntitlement] = await Promise.all([
+      db.collection("profiles").doc(uid).get(),
+      db.collection("billingEntitlements").doc(call.callerId).get(),
+      db.collection("billingEntitlements").doc(call.calleeId).get(),
+    ]);
+    assertCallParticipantsHavePro(callerEntitlement, calleeEntitlement);
+
     const accessToken = new AccessToken(liveKitApiKey.value(), liveKitApiSecret.value(), {
       identity: uid,
       name: profileName(profile.data()),
@@ -855,6 +1000,11 @@ export const heartbeatCall = onCall(async (request) => {
     if (record.status !== "accepted") {
       throw new HttpsError("failed-precondition", "This call is no longer active.");
     }
+    const [callerEntitlement, calleeEntitlement] = await Promise.all([
+      transaction.get(db.collection("billingEntitlements").doc(record.callerId)),
+      transaction.get(db.collection("billingEntitlements").doc(record.calleeId)),
+    ]);
+    assertCallParticipantsHavePro(callerEntitlement, calleeEntitlement);
     const lockRefs = record.participants.map((participantId) =>
       db.collection("callLocks").doc(participantId)
     );
@@ -898,4 +1048,199 @@ export const endCall = onCall(async (request) => {
   }
   await clearCallLocks(callId, call.participants);
   return { status: "ended" };
+});
+
+export const verifyGooglePlaySubscription = onCall(async (request) => {
+      const uid = authenticatedUid(request.auth?.uid);
+      const purchaseToken = stringValue(request.data?.purchaseToken);
+      const requestedProductId = stringValue(request.data?.productId);
+      if (!purchaseToken || purchaseToken.length > 8_000 ||
+          !requestedProductId || !PRO_PRODUCT_IDS.has(requestedProductId)) {
+        throw new HttpsError("invalid-argument", "A valid Soulmate Pro purchase is required.");
+      }
+
+      const purchase = await getPlaySubscription(purchaseToken);
+      if (!purchase) {
+        throw new HttpsError("failed-precondition", "Google Play could not verify this subscription.");
+      }
+      const lineItem = purchase.lineItems?.find((item) => item.productId === requestedProductId);
+      const expiresAtMillis = lineItem?.expiryTime
+        ? Date.parse(lineItem.expiryTime)
+        : Number.NaN;
+      const allowedStates = new Set([
+        "SUBSCRIPTION_STATE_ACTIVE",
+        "SUBSCRIPTION_STATE_CANCELED",
+        "SUBSCRIPTION_STATE_IN_GRACE_PERIOD",
+      ]);
+      if (!lineItem || !Number.isFinite(expiresAtMillis) ||
+          expiresAtMillis <= Date.now() || !allowedStates.has(purchase.subscriptionState ?? "")) {
+        throw new HttpsError("failed-precondition", "This Google Play subscription is not active.");
+      }
+
+      const tokenHash = createHash("sha256").update(purchaseToken).digest("hex");
+      const ownerRef = db.collection("googlePlayPurchaseOwners").doc(tokenHash);
+      const entitlementRef = db.collection("billingEntitlements").doc(uid);
+      await db.runTransaction(async (transaction) => {
+        const [owner, existingEntitlement] = await Promise.all([
+          transaction.get(ownerRef),
+          transaction.get(entitlementRef),
+        ]);
+        if (owner.exists && owner.get("uid") !== uid) {
+          throw new HttpsError("permission-denied", "This purchase belongs to another account.");
+        }
+        transaction.set(ownerRef, { uid, updatedAt: FieldValue.serverTimestamp() });
+        const existingExpiry = existingEntitlement.get("expiresAt");
+        const existingToken = existingEntitlement.get("purchaseToken");
+        if (!(existingExpiry instanceof Timestamp) ||
+            existingExpiry.toMillis() <= expiresAtMillis ||
+            existingToken === purchaseToken) {
+          transaction.set(entitlementRef, {
+            isPro: true,
+            subscriptionState: purchase.subscriptionState,
+            productId: requestedProductId,
+            purchaseToken,
+            expiresAt: Timestamp.fromMillis(expiresAtMillis),
+            verifiedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      });
+
+      return { isPro: true, productId: requestedProductId, expiresAt: expiresAtMillis };
+});
+
+export const getMyProStatus = onCall(async (request) => {
+      const uid = authenticatedUid(request.auth?.uid);
+      const now = Date.now();
+      const dayKey = utcDayKey(now);
+      const [entitlement, usage] = await Promise.all([
+        refreshProEntitlement(uid),
+        db.collection("dailySwipeUsage").doc(`${uid}_${dayKey}`).get(),
+      ]);
+      const swipesUsedToday = usage.get("swipesUsed") ?? 0;
+      const isPro = isCurrentPro(entitlement, now);
+      return {
+        isPro,
+        swipesUsedToday,
+        dailySwipeLimit: isPro ? null : FREE_DAILY_SWIPE_LIMIT,
+        dailySwipesRemaining: remainingFreeSwipes(isPro, swipesUsedToday),
+      };
+});
+
+export const recordSwipeWithLimit = onCall(async (request) => {
+      const uid = authenticatedUid(request.auth?.uid);
+      const targetId = stringValue(request.data?.targetId);
+      const liked = request.data?.liked;
+      if (!targetId || targetId.length > 128 || targetId === uid || typeof liked !== "boolean") {
+        throw new HttpsError("invalid-argument", "A valid profile and swipe choice are required.");
+      }
+
+      const now = Date.now();
+      const dayKey = utcDayKey(now);
+      const pair = [uid, targetId].sort();
+      const matchId = pair.join("_");
+      const swipeRef = db.collection("swipes").doc(`${uid}_${targetId}`);
+      const oppositeSwipeRef = db.collection("swipes").doc(`${targetId}_${uid}`);
+      const profileRef = db.collection("profiles").doc(targetId);
+      const entitlementRef = db.collection("billingEntitlements").doc(uid);
+      const usageRef = db.collection("dailySwipeUsage").doc(`${uid}_${dayKey}`);
+      const matchRef = db.collection("matches").doc(matchId);
+      const conversationRef = db.collection("conversations").doc(matchId);
+      const ownBlockRef = db.collection("users").doc(uid).collection("blocks").doc(targetId);
+      const targetBlockRef = db.collection("users").doc(targetId).collection("blocks").doc(uid);
+
+      await refreshProEntitlement(uid);
+      return db.runTransaction(async (transaction) => {
+        const [
+          profile, entitlement, usage, swipe, oppositeSwipe, match, conversation,
+          ownBlock, targetBlock,
+        ] = await Promise.all([
+          transaction.get(profileRef),
+          transaction.get(entitlementRef),
+          transaction.get(usageRef),
+          transaction.get(swipeRef),
+          transaction.get(oppositeSwipeRef),
+          transaction.get(matchRef),
+          transaction.get(conversationRef),
+          transaction.get(ownBlockRef),
+          transaction.get(targetBlockRef),
+        ]);
+        if (!profile.exists || profile.get("isComplete") !== true || ownBlock.exists || targetBlock.exists) {
+          throw new HttpsError("not-found", "This profile is not available.");
+        }
+
+        const isPro = isCurrentPro(entitlement, now);
+        const swipesUsedToday = usage.get("swipesUsed") ?? 0;
+        if (!canRecordSwipe(isPro, swipesUsedToday, swipe.exists)) {
+          throw new HttpsError(
+            "resource-exhausted",
+            "You’ve reached your 20 daily swipes. Upgrade to Soulmate Pro for unlimited swipes.",
+          );
+        }
+
+        transaction.set(swipeRef, {
+          senderId: uid,
+          recipientId: targetId,
+          liked,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        const nextUsage = swipe.exists ? swipesUsedToday : swipesUsedToday + 1;
+        if (!swipe.exists) {
+          transaction.set(usageRef, {
+            uid,
+            dayKey,
+            swipesUsed: nextUsage,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        const isMatch = liked && oppositeSwipe.get("liked") === true;
+        if (isMatch && !match.exists) {
+          transaction.set(matchRef, {
+            userIds: pair,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+        if (isMatch && !conversation.exists) {
+          transaction.set(conversationRef, {
+            userIds: pair,
+            archivedBy: [],
+            lastMessage: "",
+            unreadCounts: Object.fromEntries(pair.map((participant) => [participant, 0])),
+            updatedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        return {
+          isMatch,
+          isPro,
+          swipesUsedToday: nextUsage,
+          dailySwipesRemaining: remainingFreeSwipes(isPro, nextUsage),
+        };
+      });
+});
+
+export const undoSwipeForPro = onCall(async (request) => {
+      const uid = authenticatedUid(request.auth?.uid);
+      const targetId = stringValue(request.data?.targetId);
+      if (!targetId || targetId.length > 128 || targetId === uid) {
+        throw new HttpsError("invalid-argument", "A valid profile is required.");
+      }
+      const entitlementRef = db.collection("billingEntitlements").doc(uid);
+      const swipeRef = db.collection("swipes").doc(`${uid}_${targetId}`);
+      await refreshProEntitlement(uid);
+      await db.runTransaction(async (transaction) => {
+        const [entitlement, swipe] = await Promise.all([
+          transaction.get(entitlementRef),
+          transaction.get(swipeRef),
+        ]);
+        if (!isCurrentPro(entitlement, Date.now())) {
+          throw new HttpsError("permission-denied", "Rewind is available with Soulmate Pro.");
+        }
+        if (!swipe.exists) {
+          throw new HttpsError("not-found", "There is no recent swipe to rewind.");
+        }
+        transaction.delete(swipeRef);
+      });
+      return { undone: true };
 });

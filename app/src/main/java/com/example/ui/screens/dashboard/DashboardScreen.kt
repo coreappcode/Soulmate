@@ -73,6 +73,9 @@ import com.example.ui.theme.HeaderBackground
 import com.example.utils.Validators
 import com.example.utils.findActivity
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import java.util.Calendar
+import java.util.TimeZone
 
 sealed interface ActiveSubScreen {
     data object None : ActiveSubScreen
@@ -148,6 +151,8 @@ fun DashboardScreen(
     val notificationSettings by viewModel.notificationSettings.collectAsState()
     val usernameSearchResults by viewModel.usernameSearchResults.collectAsState()
     val phoneAuthState by viewModel.phoneAuthState.collectAsState()
+    val isProUser by viewModel.isProUser.collectAsState()
+    val proAccessState by viewModel.proAccessState.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val phoneAuthActivity = context.findActivity()
@@ -162,6 +167,10 @@ fun DashboardScreen(
     }
 
     fun openCall(user: User, callType: String) {
+        if (!isProUser) {
+            activeSubScreen = ActiveSubScreen.ProPlans
+            return
+        }
         context.startActivity(
             Intent(context, CallActivity::class.java)
                 .putExtra(CallActivity.EXTRA_CALLEE_ID, user.id)
@@ -206,6 +215,21 @@ fun DashboardScreen(
         userProfile.dataError?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             viewModel.clearDataError()
+        }
+    }
+
+    LaunchedEffect(userProfile.isProfileLoading, userProfile.isPhoneVerified) {
+        if (userProfile.isProfileLoading || !userProfile.isPhoneVerified) return@LaunchedEffect
+        while (true) {
+            val nextUtcDay = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            delay((nextUtcDay.timeInMillis - System.currentTimeMillis()).coerceAtLeast(1L))
+            viewModel.refreshProAccessState()
         }
     }
 
@@ -584,6 +608,9 @@ fun DashboardScreen(
 
                 is ActiveSubScreen.ProPlans -> {
                     ProPlansScreen(
+                        isPro = isProUser,
+                        onVerifyPurchase = viewModel::verifyProPurchase,
+                        onAccessUpdated = viewModel::refreshProAccessState,
                         onBack = { activeSubScreen = ActiveSubScreen.None }
                     )
                 }
@@ -799,6 +826,8 @@ fun DashboardScreen(
                             Routes.DASHBOARD_EXPLORE -> {
                                 ExploreScreen(
                                     candidates = exploreDeck,
+                                    isProUser = isProUser,
+                                    freeSwipesRemaining = proAccessState.dailySwipesRemaining,
                                     selectedSegment = exploreSegment,
                                     onSegmentChange = { viewModel.setExploreSegment(it) },
                                     onLike = { user ->
@@ -816,6 +845,9 @@ fun DashboardScreen(
                                     },
                                     onOpenSearch = {
                                         activeSubScreen = ActiveSubScreen.UsernameSearch
+                                    },
+                                    onOpenProPlans = {
+                                        activeSubScreen = ActiveSubScreen.ProPlans
                                     }
                                 )
                             }
@@ -951,6 +983,8 @@ fun DashboardScreen(
                             else -> {
                                 ExploreScreen(
                                     candidates = exploreDeck,
+                                    isProUser = isProUser,
+                                    freeSwipesRemaining = proAccessState.dailySwipesRemaining,
                                     selectedSegment = exploreSegment,
                                     onSegmentChange = { viewModel.setExploreSegment(it) },
                                     onLike = { user ->
@@ -964,7 +998,8 @@ fun DashboardScreen(
                                         activeSubScreen = ActiveSubScreen.ExploreProfileDetail(user)
                                     },
                                     onOpenFilters = { activeSubScreen = ActiveSubScreen.Filters },
-                                    onOpenSearch = { activeSubScreen = ActiveSubScreen.UsernameSearch }
+                                    onOpenSearch = { activeSubScreen = ActiveSubScreen.UsernameSearch },
+                                    onOpenProPlans = { activeSubScreen = ActiveSubScreen.ProPlans }
                                 )
                             }
                         }

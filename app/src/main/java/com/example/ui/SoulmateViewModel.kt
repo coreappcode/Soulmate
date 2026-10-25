@@ -21,8 +21,10 @@ import com.example.data.FirebaseDashboardData
 import com.example.data.FirebaseListenerRegistration
 import com.example.data.FirebasePresenceRepository
 import com.example.data.FirebaseRepository
+import com.example.data.ProAccessState
 import com.example.data.MessageStatus
 import com.example.data.SentFriendRequest
+import com.example.data.SwipeResult
 import com.example.data.User
 import com.example.data.UserProfileState
 import com.example.data.CountryCatalog
@@ -178,6 +180,8 @@ class SoulmateViewModel : ViewModel() {
 
     private val _isProUser = MutableStateFlow(false)
     val isProUser: StateFlow<Boolean> = _isProUser.asStateFlow()
+    private val _proAccessState = MutableStateFlow(ProAccessState())
+    val proAccessState: StateFlow<ProAccessState> = _proAccessState.asStateFlow()
 
     private val authStateListener = FirebaseAuth.AuthStateListener { auth ->
         val user = auth.currentUser
@@ -641,6 +645,7 @@ class SoulmateViewModel : ViewModel() {
                     isProfileLoading = false
                 )
                 refreshDashboardData()
+                refreshProAccessState()
                 applyStoredSettings(repository.loadAllSettings())
                 privacySettingsLoaded = true
                 startPresenceIfReady()
@@ -716,6 +721,7 @@ class SoulmateViewModel : ViewModel() {
         _notificationSettings.value = NotificationSettingsState()
         _availableProfiles.value = emptyList()
         _isProUser.value = false
+        _proAccessState.value = ProAccessState()
         privacySettingsLoaded = false
     }
 
@@ -1396,7 +1402,7 @@ class SoulmateViewModel : ViewModel() {
     fun swipePass(user: User) {
         viewModelScope.launch {
             try {
-                repository.recordSwipe(user, liked = false)
+                updateSwipeState(repository.recordSwipe(user, liked = false))
                 _swipedHistory.update { listOf(user) + it }
                 _availableProfiles.update { profiles -> profiles.filterNot { it.id == user.id } }
                 _exploreDeck.update { it.filterNot { candidate -> candidate.id == user.id } }
@@ -1406,14 +1412,46 @@ class SoulmateViewModel : ViewModel() {
         }
     }
 
+    fun refreshProAccessState() {
+        viewModelScope.launch {
+            try {
+                setProAccessState(repository.loadProAccessState())
+            } catch (exception: Exception) {
+                reportDataError(exception)
+            }
+        }
+    }
+
+    suspend fun verifyProPurchase(purchaseToken: String, productId: String) {
+        repository.verifyGooglePlaySubscription(purchaseToken, productId)
+        setProAccessState(repository.loadProAccessState())
+    }
+
+    private fun setProAccessState(state: ProAccessState) {
+        _proAccessState.value = state
+        _isProUser.value = state.isPro
+    }
+
+    private fun updateSwipeState(result: SwipeResult) {
+        setProAccessState(
+            ProAccessState(
+                isPro = result.isPro,
+                swipesUsedToday = result.swipesUsedToday,
+                dailySwipeLimit = if (result.isPro) null else 20,
+                dailySwipesRemaining = result.dailySwipesRemaining
+            )
+        )
+    }
+
     fun swipeLike(user: User, onMatch: (User) -> Unit) {
         viewModelScope.launch {
             try {
-                val isMatch = repository.recordSwipe(user, liked = true)
+                val swipeResult = repository.recordSwipe(user, liked = true)
+                updateSwipeState(swipeResult)
                 _swipedHistory.update { listOf(user) + it }
                 _availableProfiles.update { profiles -> profiles.filterNot { it.id == user.id } }
                 _exploreDeck.update { it.filterNot { candidate -> candidate.id == user.id } }
-                if (isMatch) {
+                if (swipeResult.isMatch) {
                     _matchedUser.value = user
                     refreshDashboardData()
                     onMatch(user)
@@ -1425,6 +1463,7 @@ class SoulmateViewModel : ViewModel() {
     }
 
     fun rewind(): Boolean {
+        if (!_isProUser.value) return false
         val lastSwiped = _swipedHistory.value.firstOrNull() ?: return false
         viewModelScope.launch {
             try {

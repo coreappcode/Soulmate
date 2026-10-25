@@ -33,6 +33,20 @@ data class FirebaseDashboardData(
     val blockedUsers: List<User> = emptyList()
 )
 
+data class ProAccessState(
+    val isPro: Boolean = false,
+    val swipesUsedToday: Int = 0,
+    val dailySwipeLimit: Int? = 20,
+    val dailySwipesRemaining: Int? = 20
+)
+
+data class SwipeResult(
+    val isMatch: Boolean,
+    val isPro: Boolean,
+    val swipesUsedToday: Int,
+    val dailySwipesRemaining: Int?
+)
+
 data class ConversationSummary(
     val id: String,
     val userId: String,
@@ -678,58 +692,58 @@ class FirebaseRepository(
             .map { it.toUser() }
     }
 
-    suspend fun recordSwipe(target: User, liked: Boolean): Boolean {
+    suspend fun recordSwipe(target: User, liked: Boolean): SwipeResult {
         val uid = requireCurrentUid()
         require(target.id != uid) { "You cannot swipe on your own profile." }
-        val currentSwipe = firestore.collection("swipes").document(swipeId(uid, target.id))
-        val oppositeSwipe = firestore.collection("swipes").document(swipeId(target.id, uid))
-        val pair = listOf(uid, target.id).sorted()
-        val matchId = pair.joinToString("_")
-        val matchRef = firestore.collection("matches").document(matchId)
-        val conversationRef = firestore.collection("conversations").document(matchId)
-
-        return firestore.runTransaction { transaction ->
-            val opposite = transaction.get(oppositeSwipe)
-            val match = transaction.get(matchRef)
-            val conversation = transaction.get(conversationRef)
-            transaction.set(
-                currentSwipe,
-                mapOf(
-                    "senderId" to uid,
-                    "recipientId" to target.id,
-                    "liked" to liked,
-                    "createdAt" to FieldValue.serverTimestamp()
-                )
-            )
-            val isMatch = liked && opposite.getBoolean("liked") == true
-            if (isMatch) {
-                if (!match.exists()) {
-                    transaction.set(
-                        matchRef,
-                        mapOf("userIds" to pair, "createdAt" to FieldValue.serverTimestamp())
-                    )
-                }
-                if (!conversation.exists()) {
-                    transaction.set(
-                        conversationRef,
-                        mapOf(
-                            "userIds" to pair,
-                            "archivedBy" to emptyList<String>(),
-                            "lastMessage" to "",
-                            "unreadCounts" to pair.associateWith { 0 },
-                            "updatedAt" to FieldValue.serverTimestamp(),
-                            "createdAt" to FieldValue.serverTimestamp()
-                        )
-                    )
-                }
-            }
-            isMatch
-        }.await()
+        val response = FirebaseFunctions.getInstance("asia-southeast1")
+            .getHttpsCallable("recordSwipeWithLimit")
+            .call(mapOf("targetId" to target.id, "liked" to liked))
+            .await()
+            .data as? Map<*, *>
+            ?: throw IllegalStateException("The swipe response was malformed.")
+        return SwipeResult(
+            isMatch = response["isMatch"] as? Boolean
+                ?: throw IllegalStateException("The swipe response did not include match status."),
+            isPro = response["isPro"] as? Boolean
+                ?: throw IllegalStateException("The swipe response did not include plan status."),
+            swipesUsedToday = (response["swipesUsedToday"] as? Number)?.toInt()
+                ?: throw IllegalStateException("The swipe response did not include daily usage."),
+            dailySwipesRemaining = (response["dailySwipesRemaining"] as? Number)?.toInt()
+        )
     }
 
     suspend fun undoSwipe(targetId: String) {
-        val uid = requireCurrentUid()
-        firestore.collection("swipes").document(swipeId(uid, targetId)).delete().await()
+        requireCurrentUid()
+        FirebaseFunctions.getInstance("asia-southeast1")
+            .getHttpsCallable("undoSwipeForPro")
+            .call(mapOf("targetId" to targetId))
+            .await()
+    }
+
+    suspend fun loadProAccessState(): ProAccessState {
+        requireCurrentUid()
+        val response = FirebaseFunctions.getInstance("asia-southeast1")
+            .getHttpsCallable("getMyProStatus")
+            .call()
+            .await()
+            .data as? Map<*, *>
+            ?: throw IllegalStateException("The Soulmate Pro status response was malformed.")
+        val isPro = response["isPro"] as? Boolean
+            ?: throw IllegalStateException("The Soulmate Pro status response was incomplete.")
+        return ProAccessState(
+            isPro = isPro,
+            swipesUsedToday = (response["swipesUsedToday"] as? Number)?.toInt() ?: 0,
+            dailySwipeLimit = (response["dailySwipeLimit"] as? Number)?.toInt(),
+            dailySwipesRemaining = (response["dailySwipesRemaining"] as? Number)?.toInt()
+        )
+    }
+
+    suspend fun verifyGooglePlaySubscription(purchaseToken: String, productId: String) {
+        requireCurrentUid()
+        FirebaseFunctions.getInstance("asia-southeast1")
+            .getHttpsCallable("verifyGooglePlaySubscription")
+            .call(mapOf("purchaseToken" to purchaseToken, "productId" to productId))
+            .await()
     }
 
     suspend fun ensureConversation(targetId: String): ChatConversation {
@@ -1199,5 +1213,4 @@ class FirebaseRepository(
         this?.toDate()?.let { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(it) }
             .orEmpty()
 
-    private fun swipeId(senderId: String, recipientId: String) = "${senderId}_$recipientId"
 }

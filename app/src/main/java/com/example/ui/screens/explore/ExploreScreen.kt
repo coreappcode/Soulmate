@@ -68,6 +68,7 @@ import coil.compose.AsyncImage
 import com.example.data.User
 import com.example.ui.components.GradientButton
 import com.example.ui.components.SegmentedControl
+import com.example.ui.components.SoulTextButton
 import com.example.ui.components.SoulTopBar
 import com.example.ui.components.VerifiedBadge
 import com.example.ui.theme.AppBackground
@@ -88,6 +89,8 @@ import kotlin.math.roundToInt
 @Composable
 fun ExploreScreen(
     candidates: List<User>,
+    isProUser: Boolean,
+    freeSwipesRemaining: Int?,
     selectedSegment: Int,
     onSegmentChange: (Int) -> Unit,
     onLike: (User) -> Unit,
@@ -96,12 +99,14 @@ fun ExploreScreen(
     onCardClick: (User) -> Unit,
     onOpenFilters: () -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenProPlans: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
     val currentTopUser = candidates.firstOrNull()
+    val canSwipe = isProUser || (freeSwipesRemaining ?: 20) > 0
 
     // Drag and animation state for top card
     val offsetX = remember { Animatable(0f) }
@@ -276,7 +281,7 @@ fun ExploreScreen(
                                 .aspectRatio(3f / 4.2f)
                                 .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
                                 .rotate(rotation)
-                                .pointerInput(currentTopUser.id) {
+                                .pointerInput(currentTopUser.id, canSwipe) {
                                     detectDragGestures(
                                         onDrag = { change, dragAmount ->
                                             change.consume()
@@ -294,7 +299,14 @@ fun ExploreScreen(
                                         },
                                         onDragEnd = {
                                             coroutineScope.launch {
-                                                if (offsetX.value > 240f) {
+                                                if (!canSwipe && abs(offsetX.value) > 240f) {
+                                                    launch { offsetX.animateTo(0f, spring()) }
+                                                    launch { offsetY.animateTo(0f, spring()) }
+                                                    onOpenProPlans()
+                                                } else if (!canSwipe) {
+                                                    launch { offsetX.animateTo(0f, spring()) }
+                                                    launch { offsetY.animateTo(0f, spring()) }
+                                                } else if (offsetX.value > 240f) {
                                                     // Swipe Right -> Like
                                                     offsetX.animateTo(
                                                         1200f,
@@ -374,6 +386,35 @@ fun ExploreScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                if (!isProUser) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (canSwipe) {
+                                "${freeSwipesRemaining ?: 20} free swipes left today · resets 00:00 UTC"
+                            } else {
+                                "Your 20 free swipes reset at 00:00 UTC."
+                            },
+                            fontFamily = InterFontFamily,
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                        if (!canSwipe) {
+                            SoulTextButton(
+                                text = "Get Pro",
+                                onClick = onOpenProPlans,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 // Action buttons row: Rewind (48dp circle white) + Pass (64dp circle white, red X) + Like (64dp circle gradient, white heart)
                 Row(
                     modifier = Modifier
@@ -382,23 +423,24 @@ fun ExploreScreen(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Rewind button (48dp circle white)
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .border(2.dp, Color(0xFF000000), CircleShape)
-                            .clickable { onRewind() }
-                            .testTag("action_rewind"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Replay,
-                            contentDescription = "Rewind",
-                            tint = Color(0xFFF59E0B),
-                            modifier = Modifier.size(24.dp)
-                        )
+                    if (isProUser) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .border(2.dp, Color(0xFF000000), CircleShape)
+                                .clickable { onRewind() }
+                                .testTag("action_rewind"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Replay,
+                                contentDescription = "Rewind",
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
 
                     // Pass button (64dp circle white, red X)
@@ -410,6 +452,10 @@ fun ExploreScreen(
                             .border(2.5.dp, Color(0xFF000000), CircleShape)
                             .clickable {
                                 if (currentTopUser != null) {
+                                    if (!canSwipe) {
+                                        onOpenProPlans()
+                                        return@clickable
+                                    }
                                     coroutineScope.launch {
                                         offsetX.animateTo(-1200f, tween(250))
                                         onPass(currentTopUser)
@@ -436,6 +482,10 @@ fun ExploreScreen(
                             .border(2.5.dp, Color(0xFF000000), CircleShape)
                             .clickable {
                                 if (currentTopUser != null) {
+                                    if (!canSwipe) {
+                                        onOpenProPlans()
+                                        return@clickable
+                                    }
                                     coroutineScope.launch {
                                         offsetX.animateTo(1200f, tween(250))
                                         onLike(currentTopUser)
