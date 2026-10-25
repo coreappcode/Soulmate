@@ -109,6 +109,7 @@ dependencies {
   implementation(libs.coil)
   implementation(libs.coil.compose)
   implementation(libs.android.image.cropper)
+  implementation(libs.androidx.appcompat)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:

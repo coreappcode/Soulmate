@@ -4,9 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import com.canhub.cropper.CropImageContract
 import com.canhub.cropper.CropImageContractOptions
 import com.canhub.cropper.CropImageOptions
+import com.example.ui.cropper.InsetsAwareCropImageContract
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -93,7 +93,7 @@ fun EditPhotosScreen(
     val context = LocalContext.current
 
     val cropImageLauncher = rememberLauncherForActivityResult(
-        contract = CropImageContract()
+        contract = InsetsAwareCropImageContract()
     ) { result ->
         if (result.isSuccessful) {
             result.uriContent?.let { croppedUri ->
@@ -127,7 +127,15 @@ fun EditPhotosScreen(
                         fixAspectRatio = true,
                         aspectRatioX = 3,
                         aspectRatioY = 4,
-                        outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG
+                        outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG,
+                        backgroundColor = android.graphics.Color.BLACK,
+                        toolbarColor = android.graphics.Color.BLACK,
+                        toolbarTitleColor = android.graphics.Color.WHITE,
+                        toolbarBackButtonColor = android.graphics.Color.WHITE,
+                        toolbarTintColor = android.graphics.Color.WHITE,
+                        activityTitle = context.getString(com.example.R.string.cropper_title),
+                        cropMenuCropButtonTitle = context.getString(com.example.R.string.cropper_action),
+                        activityMenuIconColor = android.graphics.Color.WHITE
                     )
                 )
             )

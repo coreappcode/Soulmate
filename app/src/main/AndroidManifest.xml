@@ -38,9 +38,8 @@
                 android:resource="@xml/file_paths" />
         </provider>
         <activity
-            android:name="com.canhub.cropper.CropImageActivity"
+            android:name=".ui.cropper.InsetsAwareCropImageActivity"
             android:exported="false"
-            tools:replace="android:exported"
             android:theme="@style/Theme.Soulmate.Cropper" />
         <activity
             android:name=".calls.CallActivity"

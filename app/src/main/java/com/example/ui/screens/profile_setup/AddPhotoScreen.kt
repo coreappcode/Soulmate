@@ -4,9 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import com.canhub.cropper.CropImageContract
 import com.canhub.cropper.CropImageContractOptions
 import com.canhub.cropper.CropImageOptions
+import com.example.ui.cropper.InsetsAwareCropImageContract
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -71,7 +71,7 @@ fun AddPhotoScreen(
     var croppedPhotoUri by rememberSaveable { mutableStateOf<String?>(null) }
 
     val cropImageLauncher = rememberLauncherForActivityResult(
-        contract = CropImageContract()
+        contract = InsetsAwareCropImageContract()
     ) { result ->
         if (result.isSuccessful) {
             val croppedUri = result.uriContent
@@ -100,7 +100,10 @@ fun AddPhotoScreen(
                         toolbarColor = android.graphics.Color.BLACK,
                         toolbarTitleColor = android.graphics.Color.WHITE,
                         toolbarBackButtonColor = android.graphics.Color.WHITE,
-                        toolbarTintColor = android.graphics.Color.WHITE
+                        toolbarTintColor = android.graphics.Color.WHITE,
+                        activityTitle = context.getString(com.example.R.string.cropper_title),
+                        cropMenuCropButtonTitle = context.getString(com.example.R.string.cropper_action),
+                        activityMenuIconColor = android.graphics.Color.WHITE
                     )
                 )
             )
