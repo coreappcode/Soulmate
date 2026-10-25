@@ -7,8 +7,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test test/chatNotificationPolicy.test.js test/chatAttachmentSecurity.test.js",
-    "test:rules": "firebase emulators:exec --only auth,firestore --project soulmate-chat-rules-test \"node --test test/firestoreChatRules.test.js\""
+    "test": "npm run build && node --test test/chatNotificationPolicy.test.js test/chatAttachmentSecurity.test.js test/profileValidation.test.js",
+    "test:rules": "firebase emulators:exec --only auth,firestore --project soulmate-chat-rules-test \"node --test test/firestoreChatRules.test.js\"",
+    "test:profile-callable": "npm run build && firebase emulators:exec --only auth,firestore,functions --project soulmate-chat-rules-test \"node --test test/profileCallableEmulator.test.js\""
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",

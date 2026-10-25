@@ -78,7 +78,9 @@ fun EditAboutScreen(
     }
 
     val scrollState = rememberScrollState()
-    val canSave = selectedInterests.size in 1..10 && selectedLookingFor.size == 1
+    val canSave = bio.trim().length in 10..500 &&
+        selectedInterests.size in 1..10 &&
+        selectedLookingFor.size == 1
 
     Column(
         modifier = Modifier
@@ -99,7 +101,7 @@ fun EditAboutScreen(
                 .verticalScroll(scrollState)
                 .padding(20.dp)
         ) {
-            // Bio section with 500 character counter
+            // Bio section with length guidance and a 500 character counter
             Text(
                 text = "About You",
                 fontFamily = PoppinsFontFamily,
@@ -109,7 +111,7 @@ fun EditAboutScreen(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Share your story, your quirky habits, or what makes an ideal Sunday morning.",
+                text = "Share your story in 10-500 characters. This appears on your profile.",
                 fontFamily = InterFontFamily,
                 fontSize = 13.sp,
                 color = TextSecondary
@@ -130,10 +132,11 @@ fun EditAboutScreen(
                         horizontalArrangement = Arrangement.End
                     ) {
                         Text(
-                            text = "${bio.length}/500",
+                            text = "${bio.length}/500 (10 minimum)",
                             fontFamily = InterFontFamily,
                             fontSize = 12.sp,
-                            color = if (bio.length >= 480) OrchidPrimary else TextMuted
+                            color = if (bio.trim().length !in 10..500) Color.Red
+                            else if (bio.length >= 480) OrchidPrimary else TextMuted
                         )
                     }
                 }

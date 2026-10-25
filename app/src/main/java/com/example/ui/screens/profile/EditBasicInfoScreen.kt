@@ -69,7 +69,8 @@ fun EditBasicInfoScreen(
     var city by remember { mutableStateOf(currentCity) }
 
     val isNameValid = Validators.isValidName(name)
-    val canSave = isNameValid && dob.isNotBlank() && gender.isNotBlank()
+    val isDateOfBirthValid = Validators.isValidAdultDateOfBirth(dob)
+    val canSave = isNameValid && isDateOfBirthValid && gender.isNotBlank()
     val scrollState = rememberScrollState()
 
     Column(
@@ -135,6 +136,15 @@ fun EditBasicInfoScreen(
                         tint = OrchidPrimary,
                         modifier = Modifier.size(20.dp)
                     )
+                },
+                supportingText = {
+                    if (dob.isNotBlank() && !isDateOfBirthValid) {
+                        Text(
+                            text = "Choose a valid date of birth. You must be 18 or older.",
+                            fontSize = 11.sp,
+                            color = Color.Red
+                        )
+                    }
                 }
             )
 
@@ -144,7 +154,7 @@ fun EditBasicInfoScreen(
             SoulTextField(
                 label = "City",
                 value = city,
-                onValueChange = { city = it },
+                onValueChange = { if (it.length <= 100) city = it },
                 placeholder = "e.g. Mumbai, New York"
             )
 

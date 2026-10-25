@@ -51,6 +51,7 @@ import com.example.ui.theme.PoppinsFontFamily
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.utils.Validators
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -101,12 +102,13 @@ fun DatePickerScreen(
         mutableIntStateOf(initialDate.get(Calendar.DAY_OF_MONTH))
     }
 
-    fun isFutureDate(year: Int, monthIndex: Int, day: Int): Boolean {
+    fun isAllowedDate(year: Int, monthIndex: Int, day: Int): Boolean {
         val candidate = Calendar.getInstance().apply {
             clear()
             set(year, monthIndex, day)
         }
-        return candidate.after(today)
+        if (candidate.after(today)) return false
+        return Validators.isValidAdultDateOfBirth(dateFormatter.format(candidate.time))
     }
 
     fun updateMonth(year: Int, monthIndex: Int) {
@@ -274,7 +276,7 @@ fun DatePickerScreen(
             ) {
                     items(daysList) { day ->
                     val isSelected = selectedDay == day
-                    val isFuture = isFutureDate(selectedYear, selectedMonthIndex, day)
+                    val isAllowed = isAllowedDate(selectedYear, selectedMonthIndex, day)
 
                     Box(
                         modifier = Modifier
@@ -287,7 +289,7 @@ fun DatePickerScreen(
                                     Modifier
                                 }
                             )
-                            .clickable(enabled = !isFuture) { selectedDay = day }
+                            .clickable(enabled = isAllowed) { selectedDay = day }
                             .testTag("date_day_$day"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -298,7 +300,7 @@ fun DatePickerScreen(
                             fontSize = 14.sp,
                             color = when {
                                 isSelected -> Color.White
-                                isFuture -> TextMuted
+                                !isAllowed -> TextMuted
                                 else -> TextPrimary
                             }
                         )
@@ -313,16 +315,17 @@ fun DatePickerScreen(
                 set(selectedYear, selectedMonthIndex, selectedDay)
             }
             val formattedDate = dateFormatter.format(selectedDate.time)
-            val isFutureSelection = isFutureDate(selectedYear, selectedMonthIndex, selectedDay)
+            val isAllowedSelection =
+                isAllowedDate(selectedYear, selectedMonthIndex, selectedDay)
 
             GradientButton(
                 text = "Confirm Date ($formattedDate)",
                 onClick = {
-                    if (!isFutureSelection) {
+                    if (isAllowedSelection) {
                         onDateConfirmed(formattedDate)
                     }
                 },
-                enabled = !isFutureSelection,
+                enabled = isAllowedSelection,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)

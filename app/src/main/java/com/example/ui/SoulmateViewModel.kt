@@ -1015,22 +1015,45 @@ class SoulmateViewModel : ViewModel() {
         profileSaveJob?.cancel()
         profileSaveJob = null
         val editedProfile = transform(_uiState.value)
+        val validationError = validateCompletedProfile(editedProfile)
+        if (validationError != null) {
+            _uiState.update { it.copy(dataError = validationError) }
+            return false
+        }
         _uiState.update { it.copy(isSavingProfile = true, dataError = null) }
 
         return try {
-            if (editedProfile.isOnboardingComplete) {
-                repository.saveProfile(editedProfile, complete = true)
-            } else {
-                repository.saveDraft(editedProfile)
-            }
-            _uiState.update { current ->
-                transform(current).copy(isSavingProfile = false, dataError = null)
-            }
+            val savedAge = repository.saveProfile(editedProfile, complete = true)
+            _uiState.value = editedProfile.copy(
+                age = savedAge,
+                isSavingProfile = false,
+                dataError = null
+            )
             true
         } catch (exception: Exception) {
             reportDataError(exception)
             false
         }
+    }
+
+    private fun validateCompletedProfile(profile: UserProfileState): String? = when {
+        !Validators.isValidName(profile.fullName) ->
+            "Enter a name between 2 and 50 characters."
+        !Validators.isValidAdultDateOfBirth(profile.dateOfBirth) ->
+            "Your date of birth must show that you are at least 18 years old."
+        profile.gender !in setOf("Woman", "Man", "Non-binary") ->
+            "Choose a valid gender before saving your profile."
+        !Validators.isValidUsername(profile.username) ->
+            "Choose a valid username before saving your profile."
+        profile.photos.size !in 2..6 ->
+            "A complete profile needs between two and six photos."
+        profile.bio.trim().length !in 10..500 ->
+            "Your bio must be between 10 and 500 characters."
+        profile.selectedInterests.size !in 1..10 ->
+            "Choose between one and ten interests."
+        profile.selectedLookingFor.size != 1 ->
+            "Choose one preference for who you would like to meet."
+        else -> null
     }
 
     private fun applyStoredSettings(settings: Map<String, Map<String, Any?>>) {
@@ -1113,9 +1136,13 @@ class SoulmateViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSavingProfile = true, dataError = null) }
             try {
-                repository.saveProfile(profile, complete = true)
+                val savedAge = repository.saveProfile(profile, complete = true)
                 _uiState.update {
-                    it.copy(isSavingProfile = false, isOnboardingComplete = true)
+                    it.copy(
+                        age = savedAge,
+                        isSavingProfile = false,
+                        isOnboardingComplete = true
+                    )
                 }
                 refreshDashboardData()
                 onComplete()
@@ -1152,18 +1179,24 @@ class SoulmateViewModel : ViewModel() {
             _uiState.update { it.copy(dataError = "A profile can contain at most six photos.") }
             return
         }
+        _uiState.update { it.copy(isUploadingPhoto = true, dataError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isUploadingPhoto = true, dataError = null) }
+            var uploadedPhoto: String? = null
             try {
                 val photoUrl = repository.uploadProfilePhoto(Uri.parse(uriString))
-                _uiState.update { current ->
-                    current.copy(
-                        photos = (current.photos + photoUrl).distinct().take(6),
-                        isUploadingPhoto = false
-                    )
+                uploadedPhoto = photoUrl
+                val updatedProfile = _uiState.value.copy(
+                    photos = (_uiState.value.photos + photoUrl).distinct().take(6)
+                )
+                persistPhotoProfile(updatedProfile)
+                _uiState.update {
+                    updatedProfile.copy(isUploadingPhoto = false, dataError = null)
                 }
-                scheduleProfilePersistence()
             } catch (exception: Exception) {
+                uploadedPhoto?.let { photoUrl ->
+                    deleteUploadedPhotoAfterFailure(photoUrl)
+                }
+                _uiState.update { it.copy(isUploadingPhoto = false) }
                 reportDataError(exception)
             }
         }
@@ -1173,8 +1206,8 @@ class SoulmateViewModel : ViewModel() {
         val originalPhoto = _uiState.value.photos.getOrNull(index) ?: return
         if (_uiState.value.isUploadingPhoto) return
 
+        _uiState.update { it.copy(isUploadingPhoto = true, dataError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isUploadingPhoto = true, dataError = null) }
             var uploadedPhoto: String? = null
             try {
                 uploadedPhoto = repository.uploadProfilePhoto(Uri.parse(uriString))
@@ -1186,21 +1219,13 @@ class SoulmateViewModel : ViewModel() {
                 photos[index] = uploadedPhoto
                 val updatedProfile = latestProfile.copy(
                     photos = photos,
-                    isUploadingPhoto = false
+                    isUploadingPhoto = true
                 )
-                if (updatedProfile.isOnboardingComplete) {
-                    repository.saveProfile(updatedProfile, complete = true)
-                } else {
-                    repository.saveDraft(updatedProfile)
-                }
-                _uiState.value = updatedProfile
+                persistPhotoProfile(updatedProfile)
+                _uiState.value = updatedProfile.copy(isUploadingPhoto = false, dataError = null)
             } catch (exception: Exception) {
                 uploadedPhoto?.let { photoUrl ->
-                    try {
-                        repository.deleteProfilePhoto(photoUrl)
-                    } catch (cleanupException: Exception) {
-                        reportDataError(cleanupException)
-                    }
+                    deleteUploadedPhotoAfterFailure(photoUrl)
                 }
                 _uiState.update { it.copy(isUploadingPhoto = false) }
                 reportDataError(exception)
@@ -1216,15 +1241,35 @@ class SoulmateViewModel : ViewModel() {
     }
 
     fun removePhoto(index: Int) {
-        val photo = _uiState.value.photos.getOrNull(index) ?: return
+        val currentProfile = _uiState.value
+        if (currentProfile.isUploadingPhoto) return
+        val photo = currentProfile.photos.getOrNull(index) ?: return
+        if (currentProfile.isOnboardingComplete && currentProfile.photos.size <= 2) {
+            _uiState.update {
+                it.copy(dataError = "A complete profile must keep at least two photos.")
+            }
+            return
+        }
+        _uiState.update { it.copy(isUploadingPhoto = true, dataError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(dataError = null) }
+            try {
+                val latestProfile = _uiState.value
+                val latestIndex = latestProfile.photos.indexOf(photo)
+                if (latestIndex < 0) {
+                    throw IllegalStateException("This photo is no longer on your profile.")
+                }
+                val updatedProfile = latestProfile.copy(
+                    photos = latestProfile.photos.toMutableList().apply { removeAt(latestIndex) }
+                )
+                persistPhotoProfile(updatedProfile)
+                _uiState.value = updatedProfile.copy(isUploadingPhoto = false, dataError = null)
+            } catch (exception: Exception) {
+                _uiState.update { it.copy(isUploadingPhoto = false) }
+                reportDataError(exception)
+                return@launch
+            }
             try {
                 repository.deleteProfilePhoto(photo)
-                _uiState.update {
-                    it.copy(photos = it.photos.toMutableList().apply { removeAt(index) })
-                }
-                scheduleProfilePersistence()
             } catch (exception: Exception) {
                 reportDataError(exception)
             }
@@ -1232,20 +1277,65 @@ class SoulmateViewModel : ViewModel() {
     }
 
     fun setMainPhoto(index: Int) {
-        updateProfile {
-            if (index !in it.photos.indices || index == 0) it
-            else it.copy(photos = it.photos.toMutableList().apply {
-                add(0, removeAt(index))
-            })
-        }
+        persistPhotoOrder(index, makeMain = true)
     }
 
     fun reorderPhotos(fromIndex: Int, toIndex: Int) {
-        updateProfile {
-            if (fromIndex !in it.photos.indices || toIndex !in it.photos.indices) it
-            else it.copy(photos = it.photos.toMutableList().apply {
-                add(toIndex, removeAt(fromIndex))
-            })
+        if (fromIndex == toIndex) return
+        persistPhotoOrder(fromIndex, toIndex)
+    }
+
+    private fun persistPhotoOrder(index: Int, makeMain: Boolean) {
+        viewModelScope.launch {
+            val profile = _uiState.value
+            if (profile.isUploadingPhoto || index !in profile.photos.indices) return@launch
+            val updatedPhotos = profile.photos.toMutableList().apply {
+                add(if (makeMain) 0 else index, removeAt(index))
+            }
+            persistOrderedPhotos(profile.copy(photos = updatedPhotos))
+        }
+    }
+
+    private fun persistPhotoOrder(fromIndex: Int, toIndex: Int) {
+        val profile = _uiState.value
+        if (profile.isUploadingPhoto ||
+            fromIndex !in profile.photos.indices ||
+            toIndex !in profile.photos.indices
+        ) return
+        val updatedPhotos = profile.photos.toMutableList().apply {
+            add(toIndex, removeAt(fromIndex))
+        }
+        viewModelScope.launch {
+            persistOrderedPhotos(profile.copy(photos = updatedPhotos))
+        }
+    }
+
+    private suspend fun persistOrderedPhotos(profile: UserProfileState) {
+        _uiState.update { it.copy(isUploadingPhoto = true, dataError = null) }
+        try {
+            persistPhotoProfile(profile)
+            _uiState.value = profile.copy(isUploadingPhoto = false, dataError = null)
+        } catch (exception: Exception) {
+            _uiState.update { it.copy(isUploadingPhoto = false) }
+            reportDataError(exception)
+        }
+    }
+
+    private suspend fun persistPhotoProfile(profile: UserProfileState) {
+        if (profile.isOnboardingComplete) {
+            val validationError = validateCompletedProfile(profile)
+            if (validationError != null) throw IllegalArgumentException(validationError)
+            repository.saveProfile(profile, complete = true)
+        } else {
+            repository.saveDraft(profile)
+        }
+    }
+
+    private suspend fun deleteUploadedPhotoAfterFailure(photoUrl: String) {
+        try {
+            repository.deleteProfilePhoto(photoUrl)
+        } catch (cleanupException: Exception) {
+            reportDataError(cleanupException)
         }
     }
 

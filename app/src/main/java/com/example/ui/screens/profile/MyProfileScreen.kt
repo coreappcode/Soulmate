@@ -83,6 +83,7 @@ fun MyProfileScreen(
     onNavigateToEditPhotos: () -> Unit,
     onNavigateToEditBasicInfo: () -> Unit,
     onNavigateToEditAbout: () -> Unit,
+    onNavigateToEditDetails: () -> Unit,
     onNavigateToPreview: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -257,18 +258,25 @@ fun MyProfileScreen(
                         }
 
                         // @username (tappable -> copied snackbar)
-                        val handle = if (userProfile.username.isNotBlank()) "@${userProfile.username}" else "@anya_sharma"
+                        val handle = userProfile.username.takeIf(String::isNotBlank)?.let { "@$it" }
                         Text(
-                            text = handle,
+                            text = handle ?: "Username not set",
                             fontFamily = InterFontFamily,
                             fontWeight = FontWeight.Medium,
                             fontSize = 14.sp,
                             color = OrchidPrimary,
                             modifier = Modifier
-                                .clickable {
-                                    clipboardManager.setText(AnnotatedString(handle))
-                                    Toast.makeText(context, "Copied $handle to clipboard", Toast.LENGTH_SHORT).show()
-                                }
+                                .then(
+                                    if (handle == null) Modifier
+                                    else Modifier.clickable {
+                                        clipboardManager.setText(AnnotatedString(handle))
+                                        Toast.makeText(
+                                            context,
+                                            "Copied $handle to clipboard",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
                                 .padding(vertical = 4.dp)
                                 .testTag("username_copy_handle")
                         )
@@ -509,13 +517,32 @@ fun MyProfileScreen(
                                 .border(1.5.dp, Color(0xFF000000), RoundedCornerShape(20.dp))
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Basics",
-                                    fontFamily = PoppinsFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = TextPrimary
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Basics",
+                                        fontFamily = PoppinsFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = TextPrimary
+                                    )
+                                    IconButton(
+                                        onClick = onNavigateToEditDetails,
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .testTag("edit_profile_details_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit profile details",
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(12.dp))
 
                                 Row(modifier = Modifier.fillMaxWidth()) {

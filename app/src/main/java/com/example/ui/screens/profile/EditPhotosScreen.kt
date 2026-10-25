@@ -1,7 +1,6 @@
 package com.example.ui.screens.profile
 
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -262,7 +261,6 @@ fun EditPhotosScreen(
                                 .clickable {
                                     if (!isMain) {
                                         onSetMainPhoto(index)
-                                        Toast.makeText(context, "Set as main photo", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                                 .testTag("photo_slot_$index")

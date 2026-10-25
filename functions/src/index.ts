@@ -18,6 +18,10 @@ import {
   shouldNotifyChatMessage,
   shouldRetryChatNotificationFailure,
 } from "./chatNotificationPolicy.js";
+import {
+  InvalidProfileError,
+  validateProfilePayload,
+} from "./profileValidation.js";
 
 initializeApp();
 setGlobalOptions({ region: "asia-southeast1", maxInstances: 10 });
@@ -46,7 +50,7 @@ type CallRecord = {
 
 function authenticatedUid(uid: string | undefined): string {
   if (!uid) {
-    throw new HttpsError("unauthenticated", "Sign in to place or answer a call.");
+    throw new HttpsError("unauthenticated", "Sign in to continue.");
   }
   return uid;
 }
@@ -61,6 +65,69 @@ function profileName(profile: FirebaseFirestore.DocumentData | undefined): strin
     stringValue(profile?.username) ??
     "Soulmate user";
 }
+
+export const saveMyProfile = onCall(async (request) => {
+  const uid = authenticatedUid(request.auth?.uid);
+  let validated: ReturnType<typeof validateProfilePayload>;
+  try {
+    validated = validateProfilePayload(
+      request.data?.profile,
+      request.data?.privateProfile
+    );
+  } catch (error) {
+    if (error instanceof InvalidProfileError) {
+      throw new HttpsError("invalid-argument", error.message);
+    }
+    throw error;
+  }
+
+  const profile = request.data.profile as Record<string, unknown>;
+  const userRef = db.collection("users").doc(uid);
+  const profileRef = db.collection("profiles").doc(uid);
+  const privacyRef = userRef.collection("settings").doc("privacy");
+  const nextUsernameRef = db.collection("usernames").doc(validated.username);
+
+  await db.runTransaction(async (transaction) => {
+    const [oldProfile, nextUsername, privacy] = await Promise.all([
+      transaction.get(profileRef),
+      transaction.get(nextUsernameRef),
+      transaction.get(privacyRef),
+    ]);
+    const oldUsername = stringValue(oldProfile.get("username"));
+    const oldUsernameRef = oldUsername && oldUsername !== validated.username
+      ? db.collection("usernames").doc(oldUsername)
+      : undefined;
+    const oldUsernameClaim = oldUsernameRef
+      ? await transaction.get(oldUsernameRef)
+      : undefined;
+
+    if (nextUsername.exists && nextUsername.get("uid") !== uid) {
+      throw new HttpsError("already-exists", "That username is already taken.");
+    }
+
+    if (oldUsernameRef && oldUsernameClaim?.get("uid") === uid) {
+      transaction.delete(oldUsernameRef);
+    }
+    transaction.set(nextUsernameRef, { uid, username: validated.username });
+
+    const showAge = privacy.get("showAge") !== false;
+    transaction.set(profileRef, {
+      ...profile,
+      uid,
+      age: showAge ? validated.age : null,
+      showAge,
+      verified: oldProfile.get("verified") === true,
+      isComplete: true,
+      showOnlineStatus: privacy.get("showOnlineStatus") !== false,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(userRef, {
+      ...validated.privateProfile,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+  return { saved: true, age: validated.age };
+});
 
 export const registerCallDevice = onCall(async (request) => {
   const uid = authenticatedUid(request.auth?.uid);

@@ -112,7 +112,7 @@ fun AccountSettingsScreen(
                     HorizontalDivider(color = Color(0xFF000000).copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
                     AccountOptionRow(
                         icon = Icons.Default.Email,
-                        title = "Email Address",
+                        title = "Contact Email",
                         value = userProfile.email,
                         onClick = onChangeEmail
                     )

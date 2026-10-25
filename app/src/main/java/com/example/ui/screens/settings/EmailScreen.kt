@@ -69,7 +69,7 @@ fun EmailScreen(
                 .padding(20.dp)
         ) {
             Text(
-                text = "Update Email Address",
+                text = "Contact Email",
                 fontFamily = PoppinsFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
@@ -77,7 +77,7 @@ fun EmailScreen(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "We will send receipts, account security alerts, and weekly match roundups to this address.",
+                text = "This address is saved privately as contact information. It is not verified and is not used to sign in or send email.",
                 fontFamily = InterFontFamily,
                 fontSize = 13.sp,
                 color = TextSecondary
@@ -86,7 +86,7 @@ fun EmailScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             SoulTextField(
-                label = "Email Address",
+                label = "Contact Email",
                 value = email,
                 onValueChange = { email = it.trim() },
                 placeholder = "your.name@example.com",

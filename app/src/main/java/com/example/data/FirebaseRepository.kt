@@ -10,6 +10,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.functions.FirebaseFunctionsException
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
@@ -144,39 +145,41 @@ class FirebaseRepository(
         )
     }
 
-    suspend fun saveProfile(profile: UserProfileState, complete: Boolean) {
+    suspend fun saveProfile(profile: UserProfileState, complete: Boolean): Int {
+        require(complete) { "Only completed profiles can be published." }
         val uid = requireCurrentUid()
-        val profileRef = firestore.collection("profiles").document(uid)
-        val userRef = firestore.collection("users").document(uid)
-        val privacyRef = userRef.collection("settings").document("privacy")
-        val nextUsername = profile.username.trim().lowercase(Locale.ROOT)
-        val nextUsernameRef = firestore.collection("usernames").document(nextUsername)
-
-        firestore.runTransaction { transaction ->
-            val oldProfile = transaction.get(profileRef)
-            val oldUsername = oldProfile.getString("username").orEmpty()
-            val nextUsernameSnapshot = transaction.get(nextUsernameRef)
-            val oldUsernameRef = oldUsername
-                .takeIf { it.isNotBlank() && it != nextUsername }
-                ?.let { firestore.collection("usernames").document(it) }
-            val oldUsernameSnapshot = oldUsernameRef?.let { transaction.get(it) }
-            val privacySnapshot = transaction.get(privacyRef)
-
-            if (nextUsernameSnapshot.exists() && nextUsernameSnapshot.getString("uid") != uid) {
+        val publicProfile = profile.toPublicMap(uid, complete, emptyMap()).toMutableMap().apply {
+            remove("uid")
+            remove("age")
+            remove("showAge")
+            remove("verified")
+            remove("isComplete")
+            remove("showOnlineStatus")
+            remove("updatedAt")
+        }
+        val privateProfile = profile.toPrivateMap().toMutableMap().apply {
+            remove("updatedAt")
+        }
+        return try {
+            val result = FirebaseFunctions.getInstance("asia-southeast1")
+                .getHttpsCallable("saveMyProfile")
+                .call(
+                    mapOf(
+                        "profile" to publicProfile,
+                        "privateProfile" to privateProfile
+                    )
+                )
+                .await()
+            val resultData = result.data as? Map<*, *>
+                ?: throw IllegalStateException("The profile save response was malformed.")
+            (resultData["age"] as? Number)?.toInt()
+                ?: throw IllegalStateException("The profile save response did not include age.")
+        } catch (exception: FirebaseFunctionsException) {
+            if (exception.code == FirebaseFunctionsException.Code.ALREADY_EXISTS) {
                 throw UsernameTakenException()
             }
-
-            if (oldUsernameRef != null && oldUsernameSnapshot?.getString("uid") == uid) {
-                transaction.delete(oldUsernameRef)
-            }
-            transaction.set(nextUsernameRef, mapOf("uid" to uid, "username" to nextUsername))
-            transaction.set(
-                profileRef,
-                profile.toPublicMap(uid, complete, privacySnapshot.data.orEmpty()),
-                SetOptions.merge()
-            )
-            transaction.set(userRef, profile.toPrivateMap(), SetOptions.merge())
-        }.await()
+            throw exception
+        }
     }
 
     suspend fun uploadProfilePhoto(uri: Uri): String {
@@ -193,7 +196,13 @@ class FirebaseRepository(
     }
 
     suspend fun deleteProfilePhoto(downloadUrl: String) {
-        storage.getReferenceFromUrl(downloadUrl).delete().await()
+        if (!downloadUrl.startsWith("https://firebasestorage.googleapis.com/")) return
+        val profilePathPrefix = "users/${requireCurrentUid()}/profile/"
+        val photoReference = storage.getReferenceFromUrl(downloadUrl)
+        if (!photoReference.path.startsWith(profilePathPrefix)) {
+            throw SecurityException("This photo does not belong to your profile.")
+        }
+        photoReference.delete().await()
     }
 
     suspend fun uploadVerificationSelfie(uri: Uri): String {

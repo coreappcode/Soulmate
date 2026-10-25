@@ -43,27 +43,12 @@ service cloud.firestore {
 
     match /profiles/{userId} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.auth.uid == userId
-        && request.resource.data.uid == userId
-        && request.resource.data.verified == false;
-      allow update: if signedIn()
-        && request.auth.uid == userId
-        && request.resource.data.uid == userId
-        && request.resource.data.verified == resource.data.verified;
-      allow delete: if signedIn() && request.auth.uid == userId;
+      allow write: if false;
     }
 
     match /usernames/{username} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.username == username;
-      allow update: if signedIn()
-        && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.username == username;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
     }
 
     match /swipes/{swipeId} {

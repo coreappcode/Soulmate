@@ -50,6 +50,7 @@ import com.example.ui.screens.friends.FriendsScreen
 import com.example.ui.screens.friends.RequestDetailScreen
 import com.example.ui.screens.profile.EditAboutScreen
 import com.example.ui.screens.profile.EditBasicInfoScreen
+import com.example.ui.screens.profile.EditProfileDetailsScreen
 import com.example.ui.screens.profile.EditPhotosScreen
 import com.example.ui.screens.profile.MyProfileScreen
 import com.example.ui.screens.profile.PreviewProfileScreen
@@ -114,6 +115,7 @@ sealed interface ActiveSubScreen {
     data object EditPhotos : ActiveSubScreen
     data object EditBasicInfo : ActiveSubScreen
     data object EditAbout : ActiveSubScreen
+    data object EditProfileDetails : ActiveSubScreen
     data object PreviewProfile : ActiveSubScreen
 }
 
@@ -758,6 +760,27 @@ fun DashboardScreen(
                     )
                 }
 
+                is ActiveSubScreen.EditProfileDetails -> {
+                    EditProfileDetailsScreen(
+                        currentHeight = userProfile.height,
+                        currentJob = userProfile.job,
+                        currentEducation = userProfile.education,
+                        currentZodiac = userProfile.zodiac,
+                        onSave = { height, job, education, zodiac ->
+                            saveProfileEdit {
+                                it.copy(
+                                    height = height,
+                                    job = job,
+                                    education = education,
+                                    zodiac = zodiac
+                                )
+                            }
+                        },
+                        onBack = { activeSubScreen = ActiveSubScreen.None },
+                        isSaving = userProfile.isSavingProfile
+                    )
+                }
+
                 is ActiveSubScreen.PreviewProfile -> {
                     PreviewProfileScreen(
                         userProfile = userProfile,
@@ -915,6 +938,9 @@ fun DashboardScreen(
                                     },
                                     onNavigateToEditAbout = {
                                         activeSubScreen = ActiveSubScreen.EditAbout
+                                    },
+                                    onNavigateToEditDetails = {
+                                        activeSubScreen = ActiveSubScreen.EditProfileDetails
                                     },
                                     onNavigateToPreview = {
                                         activeSubScreen = ActiveSubScreen.PreviewProfile

@@ -234,3 +234,19 @@ test("blocking atomically clears private conversation preview state", async () =
     }),
   ], alice.idToken);
 });
+
+test("profile documents and username claims can only be written by trusted backend", async () => {
+  await assert.rejects(commit([
+    updateWrite(`profiles/${alice.localId}`, {
+      uid: alice.localId,
+      fullName: "Alice Example",
+      age: 30,
+    }, { exists: false }),
+  ], alice.idToken));
+  await assert.rejects(commit([
+    updateWrite(`usernames/user_${alice.localId}`, {
+      uid: alice.localId,
+      username: `user_${alice.localId}`,
+    }, { exists: false }),
+  ], alice.idToken));
+});

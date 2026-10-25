@@ -1,7 +1,7 @@
 package com.example.utils
 
 import java.text.SimpleDateFormat
-import java.text.ParseException
+import java.text.ParsePosition
 import java.util.Calendar
 import java.util.Locale
 
@@ -35,11 +35,9 @@ object Validators {
         val formatter = SimpleDateFormat("MMM d, yyyy", Locale.US).apply {
             isLenient = false
         }
-        val birthDate = try {
-            formatter.parse(dateOfBirth) ?: return null
-        } catch (_: ParseException) {
-            return null
-        }
+        val parsePosition = ParsePosition(0)
+        val birthDate = formatter.parse(dateOfBirth, parsePosition)
+            ?.takeIf { parsePosition.index == dateOfBirth.length } ?: return null
         val birth = Calendar.getInstance().apply { time = birthDate }
         val today = Calendar.getInstance()
         var age = today.get(Calendar.YEAR) - birth.get(Calendar.YEAR)
@@ -47,7 +45,7 @@ object Validators {
             (today.get(Calendar.MONTH) == birth.get(Calendar.MONTH) &&
                 today.get(Calendar.DAY_OF_MONTH) >= birth.get(Calendar.DAY_OF_MONTH))
         if (!birthdayHasPassed) age--
-        return age.takeIf { it >= 0 }
+        return age.takeIf { it in 0..120 && !birth.after(today) }
     }
 
     fun isValidAdultDateOfBirth(dateOfBirth: String): Boolean =
